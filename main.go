@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/mchmarny/rolesetter/pkg/node"
+	"github.com/mchmarny/gpuid/pkg/node"
 )
 
 func main() {

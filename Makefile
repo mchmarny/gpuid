@@ -1,4 +1,4 @@
-APP_NAME           := node-role-controller
+APP_NAME           := gpuid
 APP_VERSION 	   := v0.5.0
 YAML_FILES         := $(shell find . -type f \( -iname "*.yml" -o -iname "*.yaml" \))
 NODE_IMAGE         ?= kindest/node:v1.33.1

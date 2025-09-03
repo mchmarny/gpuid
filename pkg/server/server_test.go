@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/mchmarny/rolesetter/pkg/log"
+	"github.com/mchmarny/gpuid/pkg/log"
 )
 
 func TestBuildHandler_HealthAndReadyEndpoints(t *testing.T) {

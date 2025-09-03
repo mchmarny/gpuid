@@ -8,7 +8,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/mchmarny/rolesetter/pkg/log"
+	"github.com/mchmarny/gpuid/pkg/log"
 	"go.uber.org/zap"
 )
 

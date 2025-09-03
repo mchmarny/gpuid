@@ -1,11 +1,11 @@
 apiVersion: policy.sigstore.dev/v1beta1
 kind: ClusterImagePolicy
 metadata:
-  name: rolesetter-slsa-v02
+  name: gpuid-slsa-v02
 spec:
   mode: enforce
   images:
-    - glob: ghcr.io/mchmarny/node-role-controller*
+    - glob: ghcr.io/mchmarny/gpuid*
   authorities:
     - keyless:
         url: https://fulcio.sigstore.dev
@@ -28,7 +28,7 @@ spec:
                 invocation: {
                   configSource: {
                     entryPoint: ".github/workflows/on-tag.yaml"
-                    uri: =~"^git\\+https://github\\.com/mchmarny/rolesetter@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
+                    uri: =~"^git\\+https://github\\.com/mchmarny/gpuid@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
                   }
                 }
               }

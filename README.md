@@ -28,7 +28,7 @@ Update [patch-configmap.yaml](deployment/overlays/prod/patch-configmap.yaml) to 
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: node-role-controller-config
+  name: gpuid-config
   namespace: node-labeler
 data:
   roleLabel: "nodeGroup" # value of this label will be the node role 
@@ -43,11 +43,11 @@ kubectl apply -k deployment/overlays/prod
 
 This will ensure all nodes with `nodeGroup=customer-gpu` are labeled with `node-role.kubernetes.io/customer-gpu`.
 
-> If you change ConfigMap value after the deployment remember to restart the deployment: `kubectl -n node-labeler rollout restart deployment node-role-controller`
+> If you change ConfigMap value after the deployment remember to restart the deployment: `kubectl -n node-labeler rollout restart deployment gpuid`
 
 ## Metrics
 
-The `node-role-controller` emits following metrics: 
+The `gpuid` emits following metrics: 
 
 - `node_role_patch_success_total`: Number of successful node patch operations.
 - `node_role_patch_failure_total`: Number of failed node patch operations.
@@ -61,7 +61,7 @@ The image produced by this repo comes with SLSA attestation which verifies that 
 > Update the image digest to the version you end up using.
 
 ```shell
-export IMAGE=ghcr.io/mchmarny/node-role-controller:v0.5.0@sha256:345638126a65cff794a59c620badcd02cdbc100d45f7745b4b42e32a803ff645
+export IMAGE=ghcr.io/mchmarny/gpuid:v0.5.0@sha256:345638126a65cff794a59c620badcd02cdbc100d45f7745b4b42e32a803ff645
 
 cosign verify-attestation \
     --output json \
@@ -138,12 +138,12 @@ Node, when you run `kubectl get nodes` you should see `3` nodes:
 
 ```shell
 NAME                                 STATUS   ROLES           AGE    VERSION
-node-role-controller-control-plane   Ready    control-plane   2m9s   v1.33.1
-node-role-controller-worker          Ready    <none>          114s   v1.33.1
-node-role-controller-worker2         Ready    <none>          114s   v1.33.1
+gpuid-control-plane   Ready    control-plane   2m9s   v1.33.1
+gpuid-worker          Ready    <none>          114s   v1.33.1
+gpuid-worker2         Ready    <none>          114s   v1.33.1
 ```
 
-Next, deploy the `node-role-controller`:
+Next, deploy the `gpuid`:
 
 ```shell
 kubectl apply -k deployment/overlays/prod
@@ -153,16 +153,16 @@ When you run the same list nodes command, you will see the roles of the nodes up
 
 ```shell
 NAME                                 STATUS   ROLES                  AGE     VERSION
-node-role-controller-control-plane   Ready    control-plane,system   3m12s   v1.33.1
-node-role-controller-worker          Ready    worker                 2m57s   v1.33.1
-node-role-controller-worker2         Ready    worker                 2m57s   v1.33.1
+gpuid-control-plane   Ready    control-plane,system   3m12s   v1.33.1
+gpuid-worker          Ready    worker                 2m57s   v1.33.1
+gpuid-worker2         Ready    worker                 2m57s   v1.33.1
 ```
 
 Any new node that joins the cluster will automatically have its role set on a value of that label. 
 
-You can also `kubectl edit node node-role-controller-worker` and change the value of the `nodeGroup` label to see new role being assigned to that node. 
+You can also `kubectl edit node gpuid-worker` and change the value of the `nodeGroup` label to see new role being assigned to that node. 
 
-> Note: technically, node can have multiple roles so the `kind-node-role-controller` just adds new one. 
+> Note: technically, node can have multiple roles so the `kind-gpuid` just adds new one. 
 
 ## Disclaimer
 

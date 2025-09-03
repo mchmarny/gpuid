@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/mchmarny/rolesetter/pkg/log"
-	"github.com/mchmarny/rolesetter/pkg/server"
+	"github.com/mchmarny/gpuid/pkg/log"
+	"github.com/mchmarny/gpuid/pkg/server"
 	"k8s.io/client-go/kubernetes/fake"
 )
 

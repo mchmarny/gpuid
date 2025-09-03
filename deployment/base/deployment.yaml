@@ -1,40 +1,40 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: node-role-controller
+  name: gpuid
   namespace: node-labeler
   labels:
-    app: node-role-controller
+    app: gpuid
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: node-role-controller
+      app: gpuid
   template:
     metadata:
       labels:
-        app: node-role-controller
+        app: gpuid
     spec:
-      serviceAccountName: node-role-controller
+      serviceAccountName: gpuid
       terminationGracePeriodSeconds: 10
       containers:
-        - name: node-role-controller
-          image: ghcr.io/mchmarny/node-role-controller:latest
+        - name: gpuid
+          image: ghcr.io/mchmarny/gpuid:latest
           env:
             - name: ROLE_LABEL
               valueFrom:
                 configMapKeyRef:
-                  name: node-role-controller-config
+                  name: gpuid-config
                   key: roleLabel
             - name: ROLE_LABEL_REPLACE
               valueFrom:
                 configMapKeyRef:
-                  name: node-role-controller-config
+                  name: gpuid-config
                   key: roleReplace
             - name: LOG_LEVEL
               valueFrom:
                 configMapKeyRef:
-                  name: node-role-controller-config
+                  name: gpuid-config
                   key: logLevel
           resources:
             requests:

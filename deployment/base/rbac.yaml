@@ -17,5 +17,5 @@ roleRef:
   name: node-role-labeler
 subjects:
   - kind: ServiceAccount
-    name: node-role-controller
+    name: gpuid
     namespace: node-labeler

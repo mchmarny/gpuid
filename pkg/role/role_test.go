@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/mchmarny/rolesetter/pkg/log"
+	"github.com/mchmarny/gpuid/pkg/log"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"

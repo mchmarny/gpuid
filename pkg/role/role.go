@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	backoff "github.com/cenkalti/backoff/v4"
-	"github.com/mchmarny/rolesetter/pkg/metric"
+	"github.com/mchmarny/gpuid/pkg/metric"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/types"
 )
