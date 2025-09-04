@@ -1,21 +1,23 @@
 [![pipeline status](https://github.com/mchmarny/gpuid/badges/main/pipeline.svg)](https://github.com/mchmarny/gpuid/-/commits/main) [![coverage report](https://github.com/mchmarny/gpuid/badges/main/coverage.svg)](https://github.com/mchmarny/gpuid/-/commits/main)
 
-# pod monitor (aka gpuid)
+# gpu serial number exporter (aka gpuid)
 
-Watches for in cluster pods based on namespace and label selectors. When new one appears, it executes a configured command in a specified container. If the command failed, it restarts the container.
+Watches for pod with device plugin daemonset based on namespace and label selectors. When new one appears, it executes `nvidia-smi` command to extract unique list of GPU serial numbers and export them to one of the defined exporters.
 
-## configurations
+## why 
 
-* [gpu-kernel-param-monitor](#gpu-kernel-param-monitor)
+Kubernetes nodes used in managed services offerings like AWS EKS or GCP GKE are VMs. These VMs can be running on any number of physical hosts. When reasoning about a GPU node, it may be required to understand the "health" of the GPU, and that GPU can be used by multiple VMs over time. 
 
-### gpu-kernel-param-monitor
+## usage
 
-Checks for incorrectly configured kernel parameters. 
+### deploy
 
-#### deploy 
+Update the `deployment/overlays/prod` overlay. The key parts are: 
+
+
 
 ```shell
-kubectl apply -k deployment/overlays/gpu-kernel-param-monitor
+kubectl apply -k deployment/overlays/prod
 ```
 
 If necessary, copy the image pull secret into the new namespace: 

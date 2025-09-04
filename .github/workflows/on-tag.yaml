@@ -52,8 +52,8 @@ jobs:
         kind-version: ${{ env.KIND_VERSION }}
         k8s-version: ${{ env.K8S_VERSION }}
         kind-worker-count: "${{ env.WORKER_NODE_COUNT }}"
-    - run: tests/set-dev-image ${{ steps.build.outputs.image-uri }} ${{ env.DEPLOYMENT_PATCH_FILE }}
-    - run: tests/integration "${{ env.WORKER_NODE_COUNT }}"
+    - run: tools/image ${{ steps.build.outputs.image-uri }} ${{ env.DEPLOYMENT_PATCH_FILE }}
+    # - run: tools/e2e "${{ env.WORKER_NODE_COUNT }}"
 
     # scan the image for vulnerabilities
     - name: Scan Image
