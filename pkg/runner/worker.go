@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/mchmarny/gpuid/pkg/counter"
-	"github.com/mchmarny/gpuid/pkg/exporter"
 	"github.com/mchmarny/gpuid/pkg/gpu"
 	"github.com/mchmarny/gpuid/pkg/node"
 	corev1 "k8s.io/api/core/v1"
@@ -184,7 +183,7 @@ func processPod(
 	}
 
 	// Export the serial numbers using the specified exporter
-	if err := exporter.Export(pctx, log, cmd.ExporterType, cmd.Cluster, pod, nodeInfo.Identifier, serials); err != nil {
+	if err := cmd.exporter.Export(pctx, log, cmd.Cluster, pod, nodeInfo.Identifier, serials); err != nil {
 		errCounter.Increment(pod.Spec.NodeName, pod.Name)
 		log.Error("failed to export GPU serial numbers",
 			"exporter", cmd.ExporterType,

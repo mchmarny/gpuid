@@ -1,0 +1,45 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# Paths
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${DIR}/common"
+ROOT=$(dirname "${DIR}")
+
+# Check for required tools
+REQUIRED_TOOLS=(aws)
+has_tools "${REQUIRED_TOOLS[@]}"
+
+# Validate arguments
+if [[ -z "${STATE_BUCKET_NAME}" ]]; then
+  err "Error: STATE_BUCKET_NAME is required."
+fi
+if [[ -z "${STATE_BUCKET_REGION}" ]]; then
+  err "Error: STATE_BUCKET_REGION is required. Defaulting to 'us-east-1'."
+fi
+
+
+# create versioned bucket if it does not exist
+if ! aws s3api head-bucket --bucket "$STATE_BUCKET_NAME" --region "$STATE_BUCKET_REGION" 2>/dev/null; then
+  echo "Creating S3 bucket: $STATE_BUCKET_NAME in region $STATE_BUCKET_REGION"
+else
+  aws s3api create-bucket \
+    --bucket "$STATE_BUCKET_NAME" \
+    --region "$STATE_BUCKET_REGION"
+fi
+
+aws s3api put-bucket-versioning \
+  --bucket "$STATE_BUCKET_NAME" \
+  --region "$STATE_BUCKET_REGION" \
+  --versioning-configuration "Status=Enabled"
+
+# Block all public access
+aws s3api put-public-access-block \
+  --bucket "$STATE_BUCKET_NAME" \
+  --region "$STATE_BUCKET_REGION" \
+  --public-access-block-configuration \
+    "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+
+
+msg "Created backend configuration in ${OUT_DIR}/backend.hcl"

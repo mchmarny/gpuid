@@ -1,7 +1,9 @@
 package runner
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -72,6 +74,23 @@ type Command struct {
 	Kubeconfig       string        // Path to kubeconfig file
 	LogLevel         string        // Logging verbosity level
 	ServerPort       int           // Port for metrics and health server
+
+	exporter *Exporter
+}
+
+func (c *Command) Init(ctx context.Context, log *slog.Logger) error {
+	if c.ExporterType == "" {
+		return ErrInvalidExporter
+	}
+
+	var err error
+
+	c.exporter, err = GetExporterSimple(ctx, log, c.ExporterType)
+	if err != nil {
+		return fmt.Errorf("failed to get exporter: %w", err)
+	}
+
+	return nil
 }
 
 // Validate performs comprehensive validation of the command configuration.

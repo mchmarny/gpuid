@@ -18,7 +18,7 @@ spec:
       serviceAccountName: gpuid
       containers:
         - name: gpuid
-          image: ghcr.io/mchmarny/gpuid@sha256:001832f6c8f2a392b12e0072502c6494665b097e4451f0e23637cf7b49c0850d
+          image: ghcr.io/mchmarny/gpuid@sha256:b21c56def657a76b27fb777ac9331ef0c4dfb300b3ed676dd3ac87dc6d9ea9ee
           resources:
             requests:
               cpu: "500m"

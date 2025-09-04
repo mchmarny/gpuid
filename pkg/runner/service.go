@@ -60,6 +60,11 @@ func Run() {
 		die("invalid command configuration: %v", logger, err)
 	}
 
+	// Initialize command (e.g., exporter setup) with proper error handling
+	if err := cmd.Init(ctx, logger); err != nil {
+		die("failed to initialize command: %v", logger, err)
+	}
+
 	// Create Kubernetes clientset with retry logic built into client
 	cs, cfg, err := buildRestConfig(cmd.Kubeconfig, cmd.QPS, cmd.Burst)
 	if err != nil {

@@ -7,12 +7,12 @@ import (
 
 // SerialNumberReading represents a single reading of a GPU serial number associated with a pod.
 type SerialNumberReading struct {
-	Cluster  string
-	Node     string
-	Machine  string
-	Source   string
-	GPU      string
-	ReadTime time.Time
+	Cluster  string    `json:"cluster" yaml:"cluster"`
+	Node     string    `json:"node" yaml:"node"`
+	Machine  string    `json:"machine" yaml:"machine"`
+	Source   string    `json:"source" yaml:"source"`
+	GPU      string    `json:"gpu" yaml:"gpu"`
+	ReadTime time.Time `json:"read_time" yaml:"read_time"`
 }
 
 // Validate checks if the SerialNumberReading has all required fields populated.
