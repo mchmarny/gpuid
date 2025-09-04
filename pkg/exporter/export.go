@@ -24,7 +24,7 @@ type Exporter func(ctx context.Context, log *slog.Logger, records []*gpu.SerialN
 // Export handles exporting GPU serial numbers for a given pod using the specified exporter type.
 // It validates inputs, logs the export process, and invokes the appropriate exporter function.
 // Returns an error if validation fails or if the export operation encounters an issue.
-func Export(ctx context.Context, log *slog.Logger, exporterType, cluster string, pod *corev1.Pod, serials []string) error {
+func Export(ctx context.Context, log *slog.Logger, exporterType, cluster string, pod *corev1.Pod, node string, serials []string) error {
 	if strings.TrimSpace(exporterType) == "" {
 		return fmt.Errorf("exporter type is required")
 	}
@@ -46,6 +46,10 @@ func Export(ctx context.Context, log *slog.Logger, exporterType, cluster string,
 		return nil
 	}
 
+	if strings.TrimSpace(node) == "" {
+		return fmt.Errorf("node name is required")
+	}
+
 	// Use default logger if none provided
 	if log == nil {
 		log = slog.Default()
@@ -55,6 +59,8 @@ func Export(ctx context.Context, log *slog.Logger, exporterType, cluster string,
 		"ns", pod.Namespace,
 		"pod", pod.Name,
 		"exporter", exporterType,
+		"node", node,
+		"cluster", cluster,
 		"serial_numbers", strings.Join(serials, ","),
 	)
 
@@ -63,7 +69,7 @@ func Export(ctx context.Context, log *slog.Logger, exporterType, cluster string,
 		records = append(records, &gpu.SerialNumberReading{
 			Cluster:  cluster,
 			Node:     pod.Spec.NodeName,
-			Machine:  "",
+			Machine:  node,
 			Source:   fmt.Sprintf("%s/%s", pod.Namespace, pod.Name),
 			GPU:      sn,
 			ReadTime: time.Now().UTC(),

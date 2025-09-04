@@ -1,4 +1,4 @@
-package parser
+package gpu
 
 import (
 	"encoding/xml"

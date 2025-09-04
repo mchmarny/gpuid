@@ -9,7 +9,8 @@ import (
 
 	"github.com/mchmarny/gpuid/pkg/counter"
 	"github.com/mchmarny/gpuid/pkg/exporter"
-	"github.com/mchmarny/gpuid/pkg/parser"
+	"github.com/mchmarny/gpuid/pkg/gpu"
+	"github.com/mchmarny/gpuid/pkg/node"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -147,8 +148,8 @@ func processPod(
 		"node", pod.Spec.NodeName,
 	)
 
-	// Execute the command with proper error handling
-	serials, err := parser.GetSerialNumbers(pctx, log, cs, cfg, pod, cmd.Container)
+	// Get GPU serial numbers from the pod
+	serials, err := gpu.GetSerialNumbers(pctx, log, cs, cfg, pod, cmd.Container)
 	if err != nil {
 		errCounter.Increment(pod.Spec.NodeName, pod.Name)
 		log.Warn("failed to get GPU serial numbers",
@@ -160,13 +161,37 @@ func processPod(
 		return fmt.Errorf("failed to get GPU serial numbers: %w", err)
 	}
 
-	if err := exporter.Export(pctx, log, cmd.ExporterType, cmd.Cluster, pod, serials); err != nil {
+	// Retrieve node provider ID for export metadata
+	nodeInfo, err := node.GetNodeProviderID(pctx, log, cs, cfg, pod.Spec.NodeName)
+	if err != nil {
+		errCounter.Increment(pod.Spec.NodeName, pod.Name)
+		log.Warn("failed to get node provider ID",
+			"pod", pod.Name,
+			"uid", pod.UID,
+			"node", pod.Spec.NodeName,
+			"err", err,
+		)
+		return fmt.Errorf("failed to get node provider ID: %w", err)
+	}
+	if nodeInfo.Identifier == "" {
+		errCounter.Increment(pod.Spec.NodeName, pod.Name)
+		log.Warn("node provider ID is empty",
+			"pod", pod.Name,
+			"uid", pod.UID,
+			"node", pod.Spec.NodeName,
+			"provider", nodeInfo.Raw,
+		)
+	}
+
+	// Export the serial numbers using the specified exporter
+	if err := exporter.Export(pctx, log, cmd.ExporterType, cmd.Cluster, pod, nodeInfo.Identifier, serials); err != nil {
 		errCounter.Increment(pod.Spec.NodeName, pod.Name)
 		log.Error("failed to export GPU serial numbers",
 			"exporter", cmd.ExporterType,
 			"pod", pod.Name,
 			"uid", pod.UID,
 			"node", pod.Spec.NodeName,
+			"provider", nodeInfo.Raw,
 			"err", err,
 		)
 		return fmt.Errorf("failed to export GPU serial numbers: %w", err)

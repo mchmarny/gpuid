@@ -22,17 +22,26 @@ trap cleanup EXIT
 # Wait for nodes to be ready
 kubectl wait --for=condition=Ready node --all --timeout=120s
 
+# Tag Nodes
+kubectl get nodes -l '!node-role.kubernetes.io/control-plane' -o name | \
+  xargs -I {} kubectl label {} run.ai/simulated-gpu-node-pool=default --overwrite
+
+# Deploy virtual GPUs
+helm upgrade -i gpu-operator oci://ghcr.io/run-ai/fake-gpu-operator/fake-gpu-operator \
+  --namespace gpu-operator \
+  --create-namespace
+
 # Apply dev deployment
 kubectl apply -k deployment/overlays/test
 
 # Restart the deployment to pick up any changes
-kubectl rollout restart deployment/test-gpuid -n gpuid
+kubectl rollout restart deployment/gpuid -n gpuid
 
 # Wait for the deployment to be available
-kubectl wait --for=condition=available --timeout=60s deployment/test-gpuid -n gpuid 
+kubectl wait --for=condition=available --timeout=60s deployment/gpuid -n gpuid 
 
 # Wait for deployment pod to be running
-kubectl rollout status deployment/test-gpuid -n gpuid --timeout=60s
+kubectl rollout status deployment/gpuid -n gpuid --timeout=60s
 
 # Print container imageID for debugging
 IMAGE=$(kubectl get pods \
@@ -66,7 +75,7 @@ msg "Checking metrics endpoint..."
 
 # Use kubectl port-forward to access metrics
 msg "Using port-forward to access metrics..."
-kubectl port-forward -n gpuid service/test-gpuid 8080:8080 >/dev/null 2>&1 &
+kubectl port-forward -n gpuid service/gpuid 8080:8080 >/dev/null 2>&1 &
 PF_PID=$!
 
 # Wait for port-forward to establish
