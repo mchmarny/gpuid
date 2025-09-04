@@ -3,11 +3,11 @@ package server
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
-	"github.com/mchmarny/gpuid/pkg/log"
-	"go.uber.org/zap"
+	"github.com/mchmarny/gpuid/pkg/logger"
 )
 
 // Server defines the interface for the server that handles metrics and health checks.
@@ -19,7 +19,7 @@ type Server interface {
 type Option func(*server)
 
 // WithLogger sets the logger for the server.
-func WithLogger(logger *zap.Logger) Option {
+func WithLogger(logger *slog.Logger) Option {
 	return func(s *server) {
 		s.logger = logger
 	}
@@ -35,20 +35,24 @@ func WithPort(port int) Option {
 // NewServer creates a new Server instance with the provided options.
 func NewServer(opts ...Option) Server {
 	s := &server{
-		logger: log.GetLogger(), // default logger
-		port:   8080,
+		port: 8080,
 	}
 
 	for _, opt := range opts {
 		opt(s)
 	}
 
-	s.logger.Info("server initialized", zap.Int("port", s.port))
+	if s.logger == nil {
+		s.logger = logger.NewProductionLogger(logger.Config{})
+	}
+
+	s.logger.Debug("server initialized", "port", s.port)
+
 	return s
 }
 
 type server struct {
-	logger *zap.Logger
+	logger *slog.Logger
 	port   int
 }
 
@@ -64,17 +68,22 @@ func (s *server) Serve(ctx context.Context, handlers map[string]http.Handler) {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	s.logger.Info("starting metrics server", zap.Int("port", s.port))
+	s.logger.Info("server starting", slog.Int("port", s.port))
 
 	go func() {
 		<-ctx.Done()
+		s.logger.Info("server shutdown initiated")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(shutdownCtx)
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			s.logger.Error("server shutdown failed", slog.Any("err", err))
+		} else {
+			s.logger.Info("server shutdown completed")
+		}
 	}()
 
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		s.logger.Fatal("failed to start metrics server", zap.Error(err))
+		s.logger.ErrorContext(ctx, "failed to start metrics server", slog.Any("err", err))
 	}
 }
 
@@ -92,7 +101,7 @@ func (s *server) buildHandler(handlers map[string]http.Handler) http.Handler {
 
 	for path, handler := range handlers {
 		mux.Handle(path, handler)
-		s.logger.Info("registered handler", zap.String("path", path))
+		s.logger.Info("registered handler", "path", path)
 	}
 
 	return mux

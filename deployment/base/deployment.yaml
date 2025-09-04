@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: gpuid
-  namespace: node-labeler
+  namespace: gpuid
   labels:
     app: gpuid
 spec:
@@ -16,33 +16,16 @@ spec:
         app: gpuid
     spec:
       serviceAccountName: gpuid
-      terminationGracePeriodSeconds: 10
       containers:
         - name: gpuid
-          image: ghcr.io/mchmarny/gpuid:latest
-          env:
-            - name: ROLE_LABEL
-              valueFrom:
-                configMapKeyRef:
-                  name: gpuid-config
-                  key: roleLabel
-            - name: ROLE_LABEL_REPLACE
-              valueFrom:
-                configMapKeyRef:
-                  name: gpuid-config
-                  key: roleReplace
-            - name: LOG_LEVEL
-              valueFrom:
-                configMapKeyRef:
-                  name: gpuid-config
-                  key: logLevel
+          image: nvcr.io/0491946863192633/gpuid@sha256:8f0523c10461717b5749aa66bd8cd724f98fa68bb7d2ce52bdd3c0297fc6d9a7
           resources:
             requests:
-              cpu: 50m
-              memory: 64Mi
+              cpu: "500m"
+              memory: "256Mi"
             limits:
-              cpu: 250m
-              memory: 256Mi
+              cpu: "1"
+              memory: "1Gi"
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false

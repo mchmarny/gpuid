@@ -1,21 +1,59 @@
+---
+# Cluster-wide - target pods in all namespaces
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: node-role-labeler
+  name: gpuid-cluster-view
 rules:
   - apiGroups: [""]
-    resources: ["nodes"]
-    verbs: ["get", "list", "watch", "patch", "update"]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+
 ---
+# Bind cluster-wide role to gpuid SA in the gpuid namespace
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: node-role-labeler
+  name: gpuid-cluster-view
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: node-role-labeler
+  name: gpuid-cluster-view
 subjects:
   - kind: ServiceAccount
     name: gpuid
-    namespace: node-labeler
+    namespace: gpuid
+
+---
+# Namespace-scoped: full control over gpuid's own namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gpuid-namespace-pods-admin
+  namespace: gpuid
+rules:
+  - apiGroups: [""]
+    resources: ["*"]
+    verbs: ["*"]
+
+---
+# Bind namespace-scoped role to gpuid SA in the gpuid namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gpuid-namespace-pods-admin
+  namespace: gpuid
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: gpuid-namespace-pods-admin
+subjects:
+  - kind: ServiceAccount
+    name: gpuid
+    namespace: gpuid

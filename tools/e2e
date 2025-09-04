@@ -1,0 +1,103 @@
+#!/bin/bash
+set -eo pipefail
+
+# Dir setup
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${DIR}/common"
+ROOT=$(dirname "${DIR}")
+
+# Check if required tools are installed
+has_tools kubectl
+
+# Cleanup function for graceful exit
+cleanup() {
+  echo "Cleaning up..."
+  pkill -f "kubectl port-forward" || true
+  rm -f /tmp/metrics.txt
+}
+
+# Set trap for cleanup on exit
+trap cleanup EXIT
+
+# Wait for nodes to be ready
+kubectl wait --for=condition=Ready node --all --timeout=120s
+
+# Apply dev deployment
+kubectl apply -k deployment/overlays/test
+
+# Restart the deployment to pick up any changes
+kubectl rollout restart deployment/test-gpuid -n gpuid
+
+# Wait for the deployment to be available
+kubectl wait --for=condition=available --timeout=60s deployment/test-gpuid -n gpuid 
+
+# Wait for deployment pod to be running
+kubectl rollout status deployment/test-gpuid -n gpuid --timeout=60s
+
+# Print container imageID for debugging
+IMAGE=$(kubectl get pods \
+  -n gpuid \
+  -l app=gpuid \
+  -o jsonpath="{.items[0].status.containerStatuses[0].imageID}")
+msg "Using image: $IMAGE"
+
+# Deploy test target into default namespace
+msg "Deploying test target pod..."
+kubectl run busybox \
+  --image=busybox:1.36 \
+  --restart=Never \
+  --namespace=default \
+  --command -- sleep 3600
+
+# Make sure the pod is running
+kubectl wait --for=condition=Ready pod/busybox -n default --timeout=60s
+
+# Wait a bit for gpuid to do its work
+msg "Waiting 10 seconds for gpuid to execute the command..."
+sleep 10
+
+# Check the logs for the expected output
+kubectl -n gpuid logs -l app=gpuid | grep "command executed successfully" || {
+  err "Integration test failed: expected log entry not found."
+}
+
+# Verify metrics are being exposed
+msg "Checking metrics endpoint..."
+
+# Use kubectl port-forward to access metrics
+msg "Using port-forward to access metrics..."
+kubectl port-forward -n gpuid service/test-gpuid 8080:8080 >/dev/null 2>&1 &
+PF_PID=$!
+
+# Wait for port-forward to establish
+sleep 5
+
+# Fetch metrics with timeout
+echo "Fetching metrics..."
+if timeout 10 curl -s "http://localhost:8080/metrics" > /tmp/metrics.txt; then
+  msg "Successfully fetched metrics"
+else
+  err "ERROR: Failed to fetch metrics via port-forward"
+fi
+
+# Verify expected metrics are present
+echo "Verifying metrics content..."
+
+# Check for basic Prometheus metrics format
+if ! grep -q "# HELP" /tmp/metrics.txt; then
+  msg "ERROR: No Prometheus metrics format found"
+fi
+
+# Check for our specific metrics
+grep "gpuid_" /tmp/metrics.txt
+
+if ! grep -q "gpuid_command_success_total" /tmp/metrics.txt; then
+  err "gpuid_command_success_total metrics found"
+fi
+
+if grep -q "gpuid_command_failure_total" /tmp/metrics.txt; then
+  err "gpuid_command_failure_total metric found"
+fi
+
+# Clean up test resources (handled by trap)
+msg "Integration test passed - gpuid is working correctly and metrics are available"

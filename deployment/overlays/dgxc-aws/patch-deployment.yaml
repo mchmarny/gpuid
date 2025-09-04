@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpuid
+  namespace: gpuid
+spec:
+  replicas: 1
+  template:
+    spec:
+      imagePullSecrets:
+        - name: nvidia-ngcuser-pull-secret
+      containers:
+        - name: gpuid
+          env:
+            - name: NAMESPACE
+              value: 'gpu-operator'
+            - name: LABEL_SELECTOR
+              value: 'app=nvidia-device-plugin-daemonset'
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: system-workload

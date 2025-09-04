@@ -1,169 +1,360 @@
-# Kubernetes Node Role Labeler
+[![pipeline status](https://github.com/mchmarny/gpuid/badges/main/pipeline.svg)](https://github.com/mchmarny/gpuid/-/commits/main) [![coverage report](https://github.com/mchmarny/gpuid/badges/main/coverage.svg)](https://github.com/mchmarny/gpuid/-/commits/main)
 
-Kubernetes controller that automatically assign node role based on a value of specific node label (e.g., `nodeGroup=gpu-worker` == `node-role.kubernetes.io/gpu-worker`).
+# pod monitor (aka gpuid)
 
-## Why 
+Watches for in cluster pods based on namespace and label selectors. When new one appears, it executes a configured command in a specified container. If the command failed, it restarts the container.
 
-By default, `kubeadm` enables the NodeRestriction admission controller that restricts what labels can be self-applied by `kubelet` on node registration. The `node-role.kubernetes.io/*` label is a restricted label and thus can't be set in the cloud init script or during other node inception process.
+## configurations
 
-## Features
+* [gpu-kernel-param-monitor](#gpu-kernel-param-monitor)
 
-- Watches for node add/update events in the cluster.
-- Checks if the node has the specified label value (configurable via launch parameter).
-- If the node is missing the corresponding Kubernetes role label, it patches the node to add it.
-- Uses exponential backoff for patch operations to handle transient API errors.
-- Emits Prometheus metrics for successful and failed node patch operations.
-- Gracefully handles shutdown signals (SIGINT/SIGTERM).
+### gpu-kernel-param-monitor
 
-## Requirements
+Checks for incorrectly configured kernel parameters. 
 
-- Runs inside a Kubernetes cluster
-- Requires RBAC permissions to patch node resources
+#### deploy 
 
-## Usage
+```shell
+kubectl apply -k deployment/overlays/gpu-kernel-param-monitor
+```
 
-Update [patch-configmap.yaml](deployment/overlays/prod/patch-configmap.yaml) to define the node label you want to use as source for the node role. Fro example: 
+If necessary, copy the image pull secret into the new namespace: 
+
+```shell
+kubectl get secret nvidia-ngcuser-pull-secret -n argocd -o yaml | \
+sed "s/namespace: argocd/namespace: gpuid/" | \
+kubectl apply -n gpuid -f -
+```
+
+#### monitor
+
+`gpuid` emits structured logging:
+
+```shell
+kubectl -n gpuid logs -l app=gpuid -f
+```
+
+Outputs structured log entries in following format: 
+
+```json
+{
+    "time":"2025-09-02T19:47:51.453877299Z",
+    "level":"INFO",
+    "source":{
+        "function":"github.com/mchmarny/gpuid/pkg/runner.processPod",
+        "file":"github.com/mchmarny/gpuid/pkg/runner/worker.go",
+        "line":207
+    },
+    "msg":"command executed successfully",
+    "service":"gpuid",
+    "worker_id":0,
+    "pod":"nvidia-driver-daemonset-zl55w",
+    "uid":"9489ff53-9bb3-4cf3-a894-f0ff2f8e6381",
+    "node":"ip-10-0-165-129.ec2.internal",
+    "container":"nvidia-driver-ctr",
+    "stdout":"GrdmaPciTopoCheckOverride is 1\n",
+    "stderr":""
+}
+```
+
+You can also use `jq` to output the key bits:
+
+```shell
+kubectl -n gpuid logs -l app=gpuid --tail=-1 \
+  | jq -s -r '.[] | select(.stdout != null) | "\(.node) \(.msg) \(.stdout)"'
+```
+
+#### delete 
+
+```shell
+kubectl delete -k deployment/overlays/gpu-kernel-param-monitor
+```
+
+## custom
+
+Create your own overlay in `deployment/overlays` directory as needed. The two variables that must be defined are: `LABEL_SELECTOR` and `COMMAND`. Everything else is optional. Here is an extended example of a command that shells into `nvidia-driver-daemonset` in the `gpu-operator` namespace and checks `/proc/driver/nvidia/params` for specific value. This example also overrides the image pull secret and tolerations. 
+
 
 ```yaml
-apiVersion: v1
-kind: ConfigMap
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: gpuid-config
-  namespace: node-labeler
-data:
-  roleLabel: "nodeGroup" # value of this label will be the node role 
-  roleReplace: "false"   # whether to replace the existing node role if one exists
+  name: gpuid
+  namespace: gpuid
+spec:
+  replicas: 1
+  template:
+    spec:
+      imagePullSecrets:
+        - name: nvidia-ngcuser-pull-secret
+      containers:
+        - name: gpuid
+          env:
+            - name: NAMESPACE
+              value: 'gpu-operator'
+            - name: LABEL_SELECTOR
+              value: 'app=nvidia-driver-daemonset'
+            - name: CONTAINER
+              value: 'nvidia-driver-ctr'
+            - name: COMMAND
+              value: |
+                VALUE=$(sed -n 's/GrdmaPciTopoCheckOverride: //p' /proc/driver/nvidia/params)
+                echo "GrdmaPciTopoCheckOverride is $VALUE"
+                [ "$VALUE" != "0" ]
+            - name: FORCE_RESTART
+              value: 'true'
+            - name: WORKERS
+              value: '5'
+            - name: TIMEOUT
+              value: '30s'
+            - name: RESYNC
+              value: '0'
+            - name: QPS
+              value: '50'
+            - name: BURST
+              value: '100'
+            - name: LOG_LEVEL
+              value: 'debug'
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: system-workload
 ```
 
-Then apply to the cluster: 
+## verification 
 
-```sh
-kubectl apply -k deployment/overlays/prod
-```
+Each release of `gpuid` distributes its images to the following registries: 
 
-This will ensure all nodes with `nodeGroup=customer-gpu` are labeled with `node-role.kubernetes.io/customer-gpu`.
+* repo - `gitlab-master.nvidia.com:5005/dgxcloud/mk8s/gpuid`
+* non-prod - `nvcr.io/nv-ngc-devops/gpuid`
+* prod - `nvcr.io/0491946863192633/gpuid`
 
-> If you change ConfigMap value after the deployment remember to restart the deployment: `kubectl -n node-labeler rollout restart deployment gpuid`
+> gpuid images are reproducible so each one of these repositories will have the same digest for a given version of the image.
 
-## Metrics
+Using one of the above registries, export a specific version of the image:
 
-The `gpuid` emits following metrics: 
-
-- `node_role_patch_success_total`: Number of successful node patch operations.
-- `node_role_patch_failure_total`: Number of failed node patch operations.
-
-## Validation (optional)
-
-The image produced by this repo comes with SLSA attestation which verifies that node role setter image was built in this repo. You can either verify that manually via [Sigstore](https://docs.sigstore.dev/about/overview/)  CLI or in the cluster suing [Sigstore](https://docs.sigstore.dev/about/overview/) policy controller.
-
-### Manual 
-
-> Update the image digest to the version you end up using.
+> This demo uses `gpuid` GitLab registry which is public inside of NV network.
 
 ```shell
-export IMAGE=ghcr.io/mchmarny/gpuid:v0.5.0@sha256:345638126a65cff794a59c620badcd02cdbc100d45f7745b4b42e32a803ff645
+export IMAGE="gitlab-master.nvidia.com:5005/dgxcloud/mk8s/gpuid"
+export DIGEST="sha256:1bc54b57005566020306c8302de57ceb26e5b657ea3b73d2bbcece76131e5b2b"
+```
 
+### slsa 
+
+The `gpuid` images comes with a [cosign attestation](https://github.com/sigstore/cosign) containing [SLSA build attestation](https://slsa.dev/spec/v1.0/) predicate that was generated by GitLab during the image build process. That attestation verifies that the image was build with a trusted pipeline. 
+
+You can verify the provenance of that image in two ways: 
+
+* Manually via [Sigstore CLI](https://docs.sigstore.dev/about/overview/)
+* In cluster, suing [Sigstore policy controller](https://docs.sigstore.dev/about/overview/)
+
+#### manual verification
+
+Start by downloading the public key of the private key that was used to sign that image: 
+
+```shell
+curl -so cosign.pub https://gitlab-master.nvidia.com/api/v4/projects/197775/repository/files/cosign.pub/raw?ref=main
+```
+
+Next, use that key to verify the attestation and output the SLSA provenance:
+
+```shell
 cosign verify-attestation \
-    --output json \
-    --type slsaprovenance \
-    --certificate-identity-regexp 'https://github.com/.*/.*/.github/workflows/.*' \
-    --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-    $IMAGE 
+  --key cosign.pub \
+  --type slsaprovenance1 \
+  $IMAGE@$DIGEST \
+  | jq -r .payload | base64 -d | jq -r .
 ```
 
-### In Cluster
+The abbreviated version of the output will look something like this: 
 
-To to ensure the image used in the node role setter was built in this repo, you can enroll that one namespace (default: `node-labeler`):
+```json
+{
+  "_type": "https://in-toto.io/Statement/v0.1",
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "subject": [
+    {
+      "name": "gitlab-master.nvidia.com:5005/dgxcloud/mk8s/gpuid",
+      "digest": {
+        "sha256": "b5e90117d84d110abd2a28aeccd786776042425258fc4a8d84345ac076c89700"
+      }
+    }
+  ],
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://gitlab.com/gitlab-org/gitlab-runner/-/blob/44feccdf/PROVENANCE.md",
+      "externalParameters": {
+        "ALLOW_NO_REF": "",
+        "CI": "",
+        ...
+        "entryPoint": "build",
+        "source": "https://github.com/mchmarny/gpuid"
+      },
+      "internalParameters": {
+        "architecture": "amd64",
+        "executor": "docker",
+        "job": "205093053",
+        "name": "dgx-platform-autotest-runner-14"
+      },
+      "resolvedDependencies": [
+        {
+          "uri": "https://github.com/mchmarny/gpuid",
+          "digest": {
+            "sha256": "7bb5c021b055dc9ed4a4f6d01c5b8ff0229c99a3"
+          }
+        }
+      ]
+    },
+    "runDetails": {
+      "builder": {
+        "id": "https://github.com/mchmarny/gpuid/-/runners/1249151",
+        "version": {
+          "gitlab-runner": "44feccdf"
+        }
+      },
+      "metadata": {
+        "invocationID": "205093053",
+        "startedOn": "2025-08-30T14:07:48-07:00",
+        "finishedOn": "2025-08-30T14:08:15-07:00"
+      }
+    }
+  }
+}
+```
+
+#### in-cluster verification
+
+To to ensure the `gpuid` image was built in this repo, you can use [Sigstore](https://docs.sigstore.dev/about/overview/) policy controller. Sample of a policy ensuring the image being admitted into the cluster comes from a trusted pipeline is available [here](deployment/policy/slsa-attestation.yaml). 
+
+### sbom
+
+Each release of `gpuid` image also comes with a Software Bill of Materials (SBOM). That SBOM is saved in [SPDX format](https://spdx.github.io/spdx-spec/v3.0.1/model/Software/Classes/Sbom/) with the image in each one of its registries. It provides a detailed inventory of all its components, libraries, dependencies, and tools in that image. First inspect the image manifest to review the architectures that that image supports:
 
 ```shell
-kubectl label namespace node-labeler policy.sigstore.dev/include=true
+crane manifest $IMAGE@$DIGEST | jq .
 ```
 
-And then add ClusterImagePolicy:
+This will output: 
+
+```json
+{
+  "schemaVersion": 2,
+  "mediaType": "application/vnd.oci.image.index.v1+json",
+  "manifests": [
+    {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "size": 1571,
+      "digest": "sha256:710d00b89b184d9b457f9a5ceaf9898d6da71d07dc1fa480d4fdd281f682203e",
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    },
+    {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "size": 1571,
+      "digest": "sha256:b9e6ddd76bfd847df8ab4e267c361034466fe69f6a38a2cf84d0fba7863f5090",
+      "platform": {
+        "architecture": "arm64",
+        "os": "linux"
+      }
+    }
+  ],
+  "annotations": {
+    "org.opencontainers.image.authors": "DGX Cloud Team https://www.nvidia.com/dgx/",
+    "org.opencontainers.image.base.digest": "sha256:5ea9cf968ccede7fef5a12f62d6577e90b852ad24985acfdb64b8eecaecae2ad",
+    "org.opencontainers.image.base.name": "cgr.dev/chainguard/static:latest",
+    "org.opencontainers.image.created": "2025-08-31T00:04:25Z",
+    "org.opencontainers.image.description": "Executes command in a Kubernetes container based on namespace/label selection.",
+    "org.opencontainers.image.revision": "381912b",
+    "org.opencontainers.image.source": "https://github.com/mchmarny/gpuid",
+    "org.opencontainers.image.title": "gpuid",
+    "org.opencontainers.image.vendor": "NVidia",
+    "org.opencontainers.image.version": "v0.2.34"
+  }
+}
+```
+
+For purpose of this demon, select the `amd64` architecture digest, and query its SBOM manifest: 
 
 ```shell
-kubectl apply -f policy/clusterimagepolicy.yaml
+crane manifest $IMAGE:sha256-710d00b89b184d9b457f9a5ceaf9898d6da71d07dc1fa480d4fdd281f682203e.sbom | jq .
 ```
 
-And then test admission policy: 
+That will output: 
+
+```json
+{
+  "schemaVersion": 2,
+  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+  "config": {
+    "mediaType": "application/vnd.oci.image.config.v1+json",
+    "size": 233,
+    "digest": "sha256:f761fe57db1f3f3b771a14ef994c6f2dce18499bb799146933fd28e233847d0c"
+  },
+  "layers": [
+    {
+      "mediaType": "text/spdx+json",
+      "size": 3482,
+      "digest": "sha256:c55158674681a08a7b53ce6b963f07e5902de01fb6b574bc6b5dcf364d15d5db"
+    }
+  ]
+}
+```
+
+Finally query the actual SBOM using the `text/spdx+json` layer digest: 
 
 ```shell
- kubectl -n node-labeler run test --image=$IMAGE
+crane blob $IMAGE@sha256:c55158674681a08a7b53ce6b963f07e5902de01fb6b574bc6b5dcf364d15d5db
 ```
 
-If you don't already have [Sigstore](https://docs.sigstore.dev/about/overview/) policy controller, you add it into your cluster:
+The SBOM includes every package/component/library included in the image so it can get pretty long. Here is a abbreviated vision: 
 
-```shell
-kubectl create namespace cosign-system
-helm repo add sigstore https://sigstore.github.io/helm-charts
-helm repo update
-helm install policy-controller -n cosign-system sigstore/policy-controller
+```json
+{
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "sbom-sha256:710d00b89b184d9b457f9a5ceaf9898d6da71d07dc1fa480d4fdd281f682203e",
+  "spdxVersion": "SPDX-2.3",
+  "creationInfo": {
+    "created": "2025-08-01T23:05:56Z",
+    "creators": [
+      "Tool: ko 0.18.0"
+    ]
+  },
+  "dataLicense": "CC0-1.0",
+  "documentNamespace": "http://spdx.org/spdxdocs/ko/sha256:710d00b89b184d9b457f9a5ceaf9898d6da71d07dc1fa480d4fdd281f682203e",
+  "documentDescribes": [
+    "SPDXRef-Package-sha256-710d00b89b184d9b457f9a5ceaf9898d6da71d07dc1fa480d4fdd281f682203e"
+  ],
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Package-sha256-710d00b89b184d9b457f9a5ceaf9898d6da71d07dc1fa480d4fdd281f682203e",
+      "name": "sha256:710d00b89b184d9b457f9a5ceaf9898d6da71d07dc1fa480d4fdd281f682203e",
+      "filesAnalyzed": false,
+      "licenseDeclared": "NOASSERTION",
+      "licenseConcluded": "NOASSERTION",
+      "downloadLocation": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "primaryPackagePurpose": "CONTAINER",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:oci/image@sha256:710d00b89b184d9b457f9a5ceaf9898d6da71d07dc1fa480d4fdd281f682203e?mediaType=application%2Fvnd.oci.image.manifest.v1%2Bjson",
+          "referenceType": "purl"
+        }
+      ]
+    },
+    ...
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-sha256-710d00b89b184d9b457f9a5ceaf9898d6da71d07dc1fa480d4fdd281f682203e"
+    },
+    ...
+  ]
+}
 ```
 
-## Demo 
-
-> Requires [Kind](https://kind.sigs.k8s.io/)
-
-To demo the functionality of this controller, first create a simple Kind configuration file (e.g. `kind.yaml`) to ensure multiple nodes
-
-```yaml
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-
-nodes:
-  - role: control-plane
-    labels:
-      nodeGroup: system
-  - role: worker
-    labels:
-      nodeGroup: worker
-  - role: worker
-    labels:
-      nodeGroup: worker
-```
-
-Next launch a Kind cluster using that config:
-
-```shell
-kind create cluster --config kind.yaml
-```
-
-Set your cluster context: 
-
-```shell
-kubectl cluster-info --context kind
-```
-
-Node, when you run `kubectl get nodes` you should see `3` nodes:
-
-```shell
-NAME                                 STATUS   ROLES           AGE    VERSION
-gpuid-control-plane   Ready    control-plane   2m9s   v1.33.1
-gpuid-worker          Ready    <none>          114s   v1.33.1
-gpuid-worker2         Ready    <none>          114s   v1.33.1
-```
-
-Next, deploy the `gpuid`:
-
-```shell
-kubectl apply -k deployment/overlays/prod
-```
-
-When you run the same list nodes command, you will see the roles of the nodes updated based on the value of the `nodeGroup` label: 
-
-```shell
-NAME                                 STATUS   ROLES                  AGE     VERSION
-gpuid-control-plane   Ready    control-plane,system   3m12s   v1.33.1
-gpuid-worker          Ready    worker                 2m57s   v1.33.1
-gpuid-worker2         Ready    worker                 2m57s   v1.33.1
-```
-
-Any new node that joins the cluster will automatically have its role set on a value of that label. 
-
-You can also `kubectl edit node gpuid-worker` and change the value of the `nodeGroup` label to see new role being assigned to that node. 
-
-> Note: technically, node can have multiple roles so the `kind-gpuid` just adds new one. 
-
-## Disclaimer
-
-This is my personal project and it does not represent my employer. While I do my best to ensure that everything works, I take no responsibility for issues caused by this code.

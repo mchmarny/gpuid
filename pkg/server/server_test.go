@@ -5,12 +5,17 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/mchmarny/gpuid/pkg/log"
+	"github.com/mchmarny/gpuid/pkg/logger"
 )
 
+func getTestServer(t *testing.T) *server {
+	t.Helper()
+	logger := logger.NewTestLogger(t)
+	return &server{logger: logger, port: 8080}
+}
+
 func TestBuildHandler_HealthAndReadyEndpoints(t *testing.T) {
-	logger := log.GetTestLogger()
-	srv := &server{logger: logger, port: 8080}
+	srv := getTestServer(t)
 	handler := srv.buildHandler(nil)
 	ts := httptest.NewServer(handler)
 	defer ts.Close()
@@ -29,8 +34,7 @@ func TestBuildHandler_HealthAndReadyEndpoints(t *testing.T) {
 }
 
 func TestBuildHandler_RegistersMetricsHandler(t *testing.T) {
-	logger := log.GetTestLogger()
-	srv := &server{logger: logger, port: 8080}
+	srv := getTestServer(t)
 	metricsCalled := false
 	metricsHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		metricsCalled = true
@@ -56,7 +60,7 @@ func TestBuildHandler_RegistersMetricsHandler(t *testing.T) {
 
 func TestWithLogger_SetsLogger(t *testing.T) {
 	s := &server{}
-	l := log.GetTestLogger()
+	l := logger.NewTestLogger(t)
 	WithLogger(l)(s)
 	if s.logger != l {
 		t.Error("WithLogger did not set logger")
@@ -76,7 +80,7 @@ func TestNewServer_DefaultsAndOptions(t *testing.T) {
 	if s == nil {
 		t.Error("NewServer returned nil")
 	}
-	custom := NewServer(WithLogger(log.GetTestLogger()), WithPort(4321))
+	custom := NewServer(WithLogger(logger.NewTestLogger(t)), WithPort(4321))
 	// Type assertion to access fields
 	impl, ok := custom.(*server)
 	if !ok {

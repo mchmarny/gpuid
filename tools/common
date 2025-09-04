@@ -1,0 +1,35 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# Globals
+PROJECT_NAME="gpuid"
+
+# Define some variables
+COLOR_GREEN='\033[0;32m'
+COLOR_RED='\033[0;31m'
+COLOR_RESET='\033[0m' # No color
+
+# global functions
+err() {
+  local message=$1
+  printf "${COLOR_RED}[ERR]${COLOR_RESET} $message\n" >&2
+  exit 1
+}
+
+msg() {
+  local message=$1
+  printf "${COLOR_GREEN}[MSG]${COLOR_RESET} $message\n" >&2
+}
+
+# Check if the required tools are installed
+has_tools() {
+  local tools=("$@")
+  for tool in "${tools[@]}"; do
+      if ! command -v $tool &> /dev/null
+      then
+          err "Required tool ($tool) is not installed."
+          exit 1
+      fi
+  done
+}

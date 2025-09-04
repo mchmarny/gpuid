@@ -18,7 +18,7 @@ jobs:
       K8S_VERSION: '1.33.x'
       GO_LINTER_VERSION: 'v2.4.0'
       ERR_VULNERABILITY_SEV: 'CRITICAL,HIGH,MEDIUM'
-      DEPLOYMENT_PATCH_FILE: deployment/overlays/dev/patch-deployment.yaml
+      DEPLOYMENT_PATCH_FILE: deployment/overlays/test/patch-deployment.yaml
       WORKER_NODE_COUNT: '2'
     outputs:
       image-uri: ${{ steps.build.outputs.image-uri }}
@@ -39,6 +39,7 @@ jobs:
     - uses: mchmarny/common/go-build@main
       id: build
       with:
+        main-path: cmd/gpuid/main.go
         image-uri: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
         go-version: ${{ env.GO_VERSION }}
         release-version: ${{ github.ref_name }}

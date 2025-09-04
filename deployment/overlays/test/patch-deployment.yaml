@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpuid
+  namespace: gpuid
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: gpuid
+          image: gpuid:latest
+          imagePullPolicy: Always
+          env:
+            - name: NAMESPACE
+              value: 'default'
+            - name: LABEL_SELECTOR
+              value: 'run=busybox'
+            - name: WORKERS
+              value: '5'
+            - name: TIMEOUT
+              value: '30s'
+            - name: RESYNC
+              value: '1m'
+            - name: QPS
+              value: '50'
+            - name: BURST
+              value: '100'
+            - name: LOG_LEVEL
+              value: 'debug'
