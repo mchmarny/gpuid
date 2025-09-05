@@ -7,8 +7,6 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${DIR}/common"
 ROOT=$(dirname "${DIR}")
 
-ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
-CLUSTER_NAME="${CLUSTER_NAME:-}"
 BUCKET_NAME="${BUCKET_NAME:-gpu-readings}"
 REGION="${REGION:-us-east-1}"
 
@@ -23,34 +21,11 @@ fi
 if [[ -z "${REGION}" ]]; then
   err "Error: REGION is required. Defaulting to 'us-east-1'."
 fi
-if [[ -z "${CLUSTER_NAME}" ]]; then
-  err "Error: CLUSTER_NAME is required."
-fi
-if [[ -z "${ACCOUNT_ID}" ]]; then
-  err "Error: Unable to determine AWS Account ID."
-fi
-if ! eksctl get cluster --name "$CLUSTER_NAME" --region "$REGION" &>/dev/null; then
-  err "Error: Cluster '$CLUSTER_NAME' not found in region '$REGION'."
-fi
 
 # print configuration
 msg "Using the following configuration:"
-msg "  AWS Account ID: $ACCOUNT_ID"
-msg "  EKS Cluster Name: $CLUSTER_NAME"
 msg "  S3 Bucket Name: $BUCKET_NAME"
 msg "  AWS Region: $REGION"
-
-# enable OIDC provider for the cluster if not already enabled
-eksctl utils associate-iam-oidc-provider \
-  --cluster "$CLUSTER_NAME" \
-  --region "$REGION" \
-  --approve
-
-OIDC_URL=$(aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" \
-  --query "cluster.identity.oidc.issuer" --output text)
-OIDC_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/${OIDC_URL#https://}"
-msg "$OIDC_URL"
-msg "$OIDC_ARN"
 
 # create versioned bucket if it does not exist
 if ! aws s3api head-bucket --bucket "$BUCKET_NAME" --region "$REGION" 2>/dev/null; then
@@ -100,34 +75,3 @@ if ! aws iam list-policies --query "Policies[?PolicyName=='${BUCKET_NAME}'].Poli
     --policy-name "$BUCKET_NAME" \
     --policy-document "file://bucket-${BUCKET_NAME}.json"
 fi
-
-# create IAM role trust 
-cat >"trust-${BUCKET_NAME}.json" <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": { "Federated": "$OIDC_ARN" },
-      "Action": "sts:AssumeRoleWithWebIdentity",
-      "Condition": {
-        "StringEquals": {
-          "$OIDC_URL:aud": "sts.amazonaws.com",
-          "$OIDC_URL:sub": "system:serviceaccount:observability:s3-writer"
-        }
-      }
-    }
-  ]
-}}
-EOF
-
-# create role and attach the policy if it does not exist
-if ! aws iam get-role --role-name "$BUCKET_NAME-writer" &>/dev/null ; then
-  aws iam create-role \
-    --role-name "$BUCKET_NAME-writer" \
-    --assume-role-policy-document "file://trust-${BUCKET_NAME}.json"
-fi
-
-aws iam attach-role-policy \
-  --role-name "$BUCKET_NAME-writer" \
-  --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/${BUCKET_NAME}"
