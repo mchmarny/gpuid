@@ -18,7 +18,7 @@ func TestGetExporterSimple(t *testing.T) {
 		exporterType string
 		wantErr      bool
 	}{
-		{"console", "console", false},
+		{"stdout", "stdout", false},
 		{"empty_type", "", true},
 		{"unknown_type", "unknown", true},
 	}
@@ -56,9 +56,9 @@ func TestExporter_Export(t *testing.T) {
 	ctx := context.Background()
 	log := slog.Default()
 
-	// Create a console exporter for testing
+	// Create a stdout exporter for testing
 	config := ExporterConfig{
-		Type: "console",
+		Type: "stdout",
 	}
 
 	exporter, err := GetExporter(ctx, log, config)
@@ -145,9 +145,9 @@ func TestExporter_Health(t *testing.T) {
 	ctx := context.Background()
 	log := slog.Default()
 
-	// Test console exporter health
+	// Test stdout exporter health
 	config := ExporterConfig{
-		Type: "console",
+		Type: "stdout",
 	}
 
 	exporter, err := GetExporter(ctx, log, config)
@@ -163,7 +163,7 @@ func TestExporterConfig_Defaults(t *testing.T) {
 
 	// Test that defaults are applied correctly
 	config := ExporterConfig{
-		Type: "console",
+		Type: "stdout",
 		// Leave batch size, retry count, and timeout as zero values
 	}
 

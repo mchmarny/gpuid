@@ -1,4 +1,4 @@
-package console
+package stdout
 
 import (
 	"context"
@@ -10,12 +10,12 @@ import (
 	"github.com/mchmarny/gpuid/pkg/gpu"
 )
 
-// New creates a new instance of the console Exporter.
+// New creates a new instance of the stdout Exporter.
 func New() *Exporter {
 	return &Exporter{}
 }
 
-// Exporter defines the console exporter that writes GPU serial number readings to stdout.
+// Exporter defines the stdout exporter that writes GPU serial number readings to stdout.
 // This implementation provides structured JSON output suitable for log aggregation systems.
 type Exporter struct{}
 
@@ -43,14 +43,14 @@ func (e *Exporter) Write(_ context.Context, _ *slog.Logger, records []*gpu.Seria
 	return nil
 }
 
-// Close performs cleanup for the console exporter.
-// Since console output doesn't require cleanup, this is a no-op but satisfies the interface.
+// Close performs cleanup for the stdout exporter.
+// Since stdout output doesn't require cleanup, this is a no-op but satisfies the interface.
 func (e *Exporter) Close(_ context.Context) error {
-	// Console exporter doesn't maintain any resources that need cleanup
+	// stdout exporter doesn't maintain any resources that need cleanup
 	return nil
 }
 
-// Health checks the health of the console exporter.
+// Health checks the health of the stdout exporter.
 // This validates that stdout is available for writing.
 func (e *Exporter) Health(_ context.Context) error {
 	// Test that we can write to stdout

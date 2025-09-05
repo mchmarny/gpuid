@@ -26,7 +26,7 @@ const (
 	EnvVarServerPort       = "SERVER_PORT"
 
 	// Default values for configuration parameters
-	DefaultExporterType     = "stdout" // Simple console output for easy debugging
+	DefaultExporterType     = "stdout" // Simple stdout output for easy debugging
 	DefaultClusterName      = ""
 	DefaultNamespace        = "gpu-operator"
 	DefaultPodLabelSelector = "app=nvidia-device-plugin-daemonset"

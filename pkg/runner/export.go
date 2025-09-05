@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mchmarny/gpuid/pkg/exporters/console"
 	"github.com/mchmarny/gpuid/pkg/exporters/s3"
+	"github.com/mchmarny/gpuid/pkg/exporters/stdout"
 	"github.com/mchmarny/gpuid/pkg/gpu"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -80,8 +80,8 @@ func GetExporter(ctx context.Context, log *slog.Logger, config ExporterConfig) (
 
 	var err error
 	switch config.Type {
-	case "console":
-		e.backend = console.New()
+	case "stdout":
+		e.backend = stdout.New()
 	case "s3":
 		e.backend, err = s3.New(ctx)
 		if err != nil {
