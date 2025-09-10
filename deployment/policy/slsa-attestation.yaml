@@ -1,0 +1,24 @@
+apiVersion: policy.sigstore.dev/v1alpha1
+kind: ClusterImagePolicy
+metadata:
+  name: slsa-attestation
+spec:
+  images:
+  - glob: "**"
+  authorities:
+  - name: custom-key
+    key:
+      data: |
+        -----BEGIN PUBLIC KEY-----
+        MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEWi8OB3N37i0w0rvcVZzI+odMMit/
+        dqZL3qowUtt90eORINep7Zqr4KZW09aOTJ5i7Mr2m3sInTGuBOmtw1Iguw==
+        -----END PUBLIC KEY-----
+    ctlog:
+      url: https://rekor.sigstore.dev
+    attestations:
+    - name: must-have-slsa
+      predicateType: slsaprovenance1
+      policy:
+        type: cue
+        data: |
+          predicateType: "https://slsa.dev/provenance/v1"

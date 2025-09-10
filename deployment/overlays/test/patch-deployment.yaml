@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpuid
+  namespace: gpuid
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: gpuid
+          env:
+            - name: CLUSTER_NAME
+              value: 'prod'
+            - name: NAMESPACE
+              value: 'gpu-operator'
+            - name: LABEL_SELECTOR
+              value: 'app=nvidia-device-plugin-daemonset'
+            - name: EXPORTER_TYPE
+              value: 'stdout'
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: system-workload

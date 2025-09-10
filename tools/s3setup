@@ -1,0 +1,77 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# Paths
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${DIR}/common"
+ROOT=$(dirname "${DIR}")
+
+BUCKET_NAME="${BUCKET_NAME:-gpu-readings}"
+REGION="${REGION:-us-east-1}"
+
+# Check for required tools
+REQUIRED_TOOLS=(aws eksctl)
+has_tools "${REQUIRED_TOOLS[@]}"
+
+# Validate arguments
+if [[ -z "${BUCKET_NAME}" ]]; then
+  err "Error: BUCKET_NAME is required."
+fi
+if [[ -z "${REGION}" ]]; then
+  err "Error: REGION is required. Defaulting to 'us-east-1'."
+fi
+
+# print configuration
+msg "Using the following configuration:"
+msg "  S3 Bucket Name: $BUCKET_NAME"
+msg "  AWS Region: $REGION"
+
+# create versioned bucket if it does not exist
+if ! aws s3api head-bucket --bucket "$BUCKET_NAME" --region "$REGION" 2>/dev/null; then
+  aws s3api create-bucket \
+    --bucket "$BUCKET_NAME" \
+    --region "$REGION"
+fi
+
+aws s3api put-bucket-versioning \
+  --bucket "$BUCKET_NAME" \
+  --region "$REGION" \
+  --versioning-configuration "Status=Enabled"
+
+# Block all public access
+aws s3api put-public-access-block \
+  --bucket "$BUCKET_NAME" \
+  --region "$REGION" \
+  --public-access-block-configuration \
+    "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+
+# write out S3 bucket policy to a temp file if it does not exist
+ cat >"bucket-${BUCKET_NAME}.json" <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "WriteObjects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:AbortMultipartUpload"
+      ],
+      "Resource": "arn:aws:s3:::${BUCKET_NAME}/*"
+    },
+    {
+      "Sid": "OptionalListForUploader",
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket"],
+      "Resource": "arn:aws:s3:::${BUCKET_NAME}"
+    }
+  ]
+}
+EOF
+
+if ! aws iam list-policies --query "Policies[?PolicyName=='${BUCKET_NAME}'].PolicyName" --output text 2>/dev/null | grep -q "${BUCKET_NAME}"; then
+  aws iam create-policy \
+    --policy-name "$BUCKET_NAME" \
+    --policy-document "file://bucket-${BUCKET_NAME}.json"
+fi

@@ -1,0 +1,6 @@
+resources:
+  - ns.yaml
+  - sa.yaml
+  - rbac.yaml
+  - deployment.yaml
+  - service.yaml

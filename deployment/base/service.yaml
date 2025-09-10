@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpuid
+  namespace: gpuid
+  labels:
+    app: gpuid
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+spec:
+  selector:
+    app: gpuid
+  ports:
+    - name: metrics
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+  type: ClusterIP

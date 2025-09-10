@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpuid
+  namespace: gpuid
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: gpuid
+          env:
+            # GPU Serial Number Provider
+            - name: CLUSTER_NAME
+              value: 'prod'
+            - name: NAMESPACE
+              value: 'gpu-operator'
+            - name: LABEL_SELECTOR
+              value: 'app=nvidia-device-plugin-daemonset'
+            # S3 Exporter Configuration
+            - name: EXPORTER_TYPE
+              value: 's3'
+            - name: S3_BUCKET
+              value: 'gpuids'
+            - name: S3_PREFIX
+              value: 'prod'
+            - name: S3_REGION
+              value: 'us-east-1'
+            # AWS Credentials from Kubernetes Secret
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: AWS_SECRET_ACCESS_KEY
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: system-workload

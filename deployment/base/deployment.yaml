@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpuid
+  namespace: gpuid
+  labels:
+    app: gpuid
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpuid
+  template:
+    metadata:
+      labels:
+        app: gpuid
+    spec:
+      serviceAccountName: gpuid
+      containers:
+        - name: gpuid
+          image: ghcr.io/mchmarny/gpuid@sha256:b21c56def657a76b27fb777ac9331ef0c4dfb300b3ed676dd3ac87dc6d9ea9ee
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - containerPort: 8080
+              name: metrics
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+      restartPolicy: Always
