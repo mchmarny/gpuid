@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpuid
+  namespace: gpuid
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: gpuid
+          env:
+            - name: EXPORTER_TYPE
+              value: 'postgres'
+            - name: POSTGRES_HOST
+              value: 'postgresql.database.svc.cluster.local'
+            - name: POSTGRES_PORT
+              value: '5432'
+            - name: POSTGRES_DB
+              value: 'gpus'
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: password
+            - name: POSTGRES_SSLMODE
+              value: 'require'
+            - name: POSTGRES_TABLE
+              value: 'gpus'
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: system-workload

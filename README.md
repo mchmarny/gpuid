@@ -17,7 +17,7 @@ The `gpuid` service provides a lightweight, scalable solution for GPU inventory 
 
 ## Features
 
-- **Configurable Backends**: Support for stdout, PostgreSQL, and Amazon S3 (PubSub, SQS support coming)
+- **Configurable Backends**: Support for stdout, PostgreSQL DB, and Amazon S3 bucket
 - **Scale Ready**: Connection pooling, retry logic, health checks
 - **Structured Logging**: JSON-formatted logs with contextual information
 - **Emitting Metrics**: Prometheus-compatible metrics for monitoring

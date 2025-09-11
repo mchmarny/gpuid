@@ -1,0 +1,166 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# Paths
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${DIR}/common"
+ROOT=$(dirname "${DIR}")
+
+BUCKET_NAME="${BUCKET_NAME:-gpuids}"
+REGION="${REGION:-us-east-1}"
+SA_NAME="${SA_NAME:-gpuid-sa}"
+
+# Check for required tools
+REQUIRED_TOOLS=(aws)
+has_tools "${REQUIRED_TOOLS[@]}"
+
+# Validate arguments
+if [[ -z "${BUCKET_NAME}" ]]; then
+  err "Error: BUCKET_NAME is required."
+fi
+if [[ -z "${SA_NAME}" ]]; then
+  err "Error: SA_NAME is required."
+fi
+if [[ -z "${REGION}" ]]; then
+  err "Error: REGION is required. Defaulting to 'us-east-1'."
+fi
+
+# print configuration
+msg "Using the following configuration:"
+msg "  S3 Bucket: $BUCKET_NAME"
+msg "  AWS Region: $REGION"
+msg "  Service Account: $SA_NAME"
+
+# create versioned bucket if it does not exist
+if ! aws s3api head-bucket --bucket "$BUCKET_NAME" --region "$REGION" 2>/dev/null; then
+  aws s3api create-bucket \
+    --bucket "$BUCKET_NAME" \
+    --region "$REGION"
+fi
+
+aws s3api put-bucket-versioning \
+  --bucket "$BUCKET_NAME" \
+  --region "$REGION" \
+  --versioning-configuration "Status=Enabled"
+
+# Block all public access
+aws s3api put-public-access-block \
+  --bucket "$BUCKET_NAME" \
+  --region "$REGION" \
+  --public-access-block-configuration \
+    "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+
+# Create IAM policy for S3 bucket access
+POLICY_NAME="${BUCKET_NAME}-s3-policy"
+POLICY_ARN=""
+
+# write out S3 bucket policy to a temp file
+cat >"bucket-${BUCKET_NAME}.json" <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "WriteObjects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:AbortMultipartUpload"
+      ],
+      "Resource": "arn:aws:s3:::${BUCKET_NAME}/*"
+    },
+    {
+      "Sid": "OptionalListForUploader",
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket"],
+      "Resource": "arn:aws:s3:::${BUCKET_NAME}"
+    }
+  ]
+}
+EOF
+
+# Create or get IAM policy
+if ! aws iam list-policies \
+  --query "Policies[?PolicyName=='${POLICY_NAME}'].PolicyName" \
+  --output text 2>/dev/null | grep -q "${POLICY_NAME}"; then
+  msg "Creating IAM policy: ${POLICY_NAME}"
+  POLICY_ARN=$(aws iam create-policy \
+    --policy-name "$POLICY_NAME" \
+    --policy-document "file://bucket-${BUCKET_NAME}.json" \
+    --description "Policy for uploading objects to ${BUCKET_NAME} S3 bucket" \
+    --query 'Policy.Arn' \
+    --output text)
+else
+  msg "IAM policy ${POLICY_NAME} already exists"
+  POLICY_ARN=$(aws iam list-policies \
+    --query "Policies[?PolicyName=='${POLICY_NAME}'].Arn" \
+    --output text)
+fi
+
+msg "Policy ARN: ${POLICY_ARN}"
+
+# Create service account (IAM user)
+if ! aws iam get-user --user-name "${SA_NAME}" >/dev/null 2>&1; then
+  msg "Creating service account (IAM user): ${SA_NAME}"
+  aws iam create-user \
+    --user-name "${SA_NAME}" \
+    --tags "Key=Purpose,Value=S3Upload" "Key=Bucket,Value=${BUCKET_NAME}" "Key=Project,Value=gpuid"
+else
+  msg "Service account ${SA_NAME} already exists"
+fi
+
+# Attach policy to service account
+msg "Attaching policy to service account..."
+aws iam attach-user-policy \
+  --user-name "${SA_NAME}" \
+  --policy-arn "${POLICY_ARN}"
+
+# Create access keys for service account
+msg "Creating access keys for service account..."
+
+# Check if access keys already exist
+EXISTING_KEYS=$(aws iam list-access-keys \
+  --user-name "${SA_NAME}" \
+  --query 'AccessKeyMetadata[?Status==`Active`].AccessKeyId' \
+  --output text)
+
+if [[ -n "${EXISTING_KEYS}" ]]; then
+  msg "Warning: Active access keys already exist for ${SA_NAME}:"
+  for key in ${EXISTING_KEYS}; do
+    msg "  - ${key}"
+  done
+  msg "Consider rotating these keys or delete them before creating new ones."
+  msg "To delete existing keys: aws iam delete-access-key --user-name ${SA_NAME} --access-key-id <KEY_ID>"
+else
+  # Create new access keys
+  ACCESS_KEY_OUTPUT=$(aws iam create-access-key --user-name "${SA_NAME}" --output json)
+  ACCESS_KEY_ID=$(echo "$ACCESS_KEY_OUTPUT" | jq -r '.AccessKey.AccessKeyId')
+  SECRET_ACCESS_KEY=$(echo "$ACCESS_KEY_OUTPUT" | jq -r '.AccessKey.SecretAccessKey')
+
+  msg ""
+  msg "=========================================="
+  msg "ACCESS KEYS CREATED SUCCESSFULLY"
+  msg "=========================================="
+  msg "Service Account: ${SA_NAME}"
+  msg "Access Key ID: ${ACCESS_KEY_ID}"
+  msg "Secret Access Key: ${SECRET_ACCESS_KEY}"
+  msg "Region: ${REGION}"
+  msg "Bucket: ${BUCKET_NAME}"
+  msg "=========================================="
+  msg ""
+  msg "IMPORTANT: Save these credentials securely!"
+  msg "The secret access key will not be shown again."
+  msg ""
+  msg "Environment variables for your application:"
+  msg "export AWS_ACCESS_KEY_ID=\"${ACCESS_KEY_ID}\""
+  msg "export AWS_SECRET_ACCESS_KEY=\"${SECRET_ACCESS_KEY}\""
+  msg "export AWS_REGION=\"${REGION}\""
+  msg "export S3_BUCKET=\"${BUCKET_NAME}\""
+  msg ""
+fi
+
+# Clean up temporary policy file
+rm -f "bucket-${BUCKET_NAME}.json"
+
+
+msg "S3 bucket and service account setup complete."
