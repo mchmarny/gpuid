@@ -9,7 +9,7 @@ permissions:
 
 jobs:
 
-  release:
+  build:
     env:
       IMAGE_NAME: gpuid
       GO_VERSION: '1.25.0'
@@ -70,21 +70,21 @@ jobs:
         exit-code: "1"
 
   provenance:
-    needs: [release]
+    needs: [build]
     permissions:
       actions: read
       id-token: write
       packages: write
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0  # Must use tagged version
     with:
-      image: ${{ needs.release.outputs.image-name }}
-      digest: ${{ needs.release.outputs.image-digest }}
+      image: ${{ needs.build.outputs.image-name }}
+      digest: ${{ needs.build.outputs.image-digest }}
       registry-username: ${{ github.actor }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
   verification:
-    needs: [release, provenance]
+    needs: [build, provenance]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -93,6 +93,6 @@ jobs:
     - name: Verify SLSA Provenance (slsa-verifier)
       shell: bash
       run: |-
-        slsa-verifier verify-image ${{ needs.release.outputs.image-uri }} \
-          --source-uri "${{ needs.release.outputs.source-uri }}" \
-          --source-tag "${{ needs.release.outputs.source-tag }}"
+        slsa-verifier verify-image ${{ needs.build.outputs.image-uri }} \
+          --source-uri "${{ needs.build.outputs.source-uri }}" \
+          --source-tag "${{ needs.build.outputs.source-tag }}"
