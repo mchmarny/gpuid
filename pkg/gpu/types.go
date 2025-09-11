@@ -15,6 +15,18 @@ type SerialNumberReading struct {
 	Time    time.Time `json:"time" yaml:"time"`
 }
 
+// Slice returns the SerialNumberReading fields as a slice of strings for CSV serialization.
+func (r *SerialNumberReading) Slice() []string {
+	return []string{
+		r.Cluster,
+		r.Node,
+		r.Machine,
+		r.Source,
+		r.GPU,
+		r.Time.Format(time.RFC3339),
+	}
+}
+
 // Validate checks if the SerialNumberReading has all required fields populated.
 func (r *SerialNumberReading) Validate() error {
 	if r.Cluster == "" {

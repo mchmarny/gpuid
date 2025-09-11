@@ -3,7 +3,7 @@ package s3
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/csv"
 	"fmt"
 	"log/slog"
 	"os"
@@ -81,7 +81,7 @@ func New(ctx context.Context) (*Exporter, error) {
 }
 
 // Write uploads GPU serial number readings to S3 with time-based partitioning.
-// Records are batched and uploaded as NDJSON for efficient querying and processing.
+// Records are batched and uploaded as headerless CSV for DMS compatibility and efficient processing.
 func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.SerialNumberReading) error {
 	if len(records) == 0 {
 		return nil
@@ -91,30 +91,38 @@ func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.S
 	timestamp := time.Now().UTC()
 	key := e.generateS3Key(timestamp)
 
-	// Serialize records to NDJSON format for efficient processing
+	// Serialize records to CSV format for efficient processing
 	var buffer bytes.Buffer
-	encoder := json.NewEncoder(&buffer)
+	writer := csv.NewWriter(&buffer)
 
 	for _, record := range records {
 		if record == nil {
 			continue
 		}
 
-		if err := encoder.Encode(record); err != nil {
-			return fmt.Errorf("failed to encode record for S3 upload: %w", err)
+		if err := writer.Write(record.Slice()); err != nil {
+			return fmt.Errorf("failed to write CSV record: %w", err)
 		}
 	}
 
-	// In a real implementation, upload to S3:
+	// Flush the writer to ensure all data is written to buffer
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return fmt.Errorf("failed to flush CSV writer: %w", err)
+	}
+
+	// Upload to S3
 	if _, err := e.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(e.Bucket),
 		Key:         aws.String(key),
 		Body:        bytes.NewReader(buffer.Bytes()),
-		ContentType: aws.String("application/x-ndjson"),
+		ContentType: aws.String("text/csv"),
 		Metadata: map[string]string{
 			"source":       "gpuid",
 			"record_count": fmt.Sprintf("%d", len(records)),
 			"timestamp":    timestamp.Format(time.RFC3339),
+			"format":       "csv",
+			"columns":      "cluster,node,machine,source,gpu,time", // Column order for DMS mapping
 		},
 	}); err != nil {
 		return fmt.Errorf("failed to upload records to S3: %w", err)
@@ -146,7 +154,7 @@ func (e *Exporter) Health(ctx context.Context) error {
 }
 
 // generateS3Key creates a time-partitioned S3 key for efficient data organization.
-// Default pattern: prefix/year=YYYY/month=MM/day=DD/hour=HH/timestamp.json
+// Default pattern: prefix/year=YYYY/month=MM/day=DD/hour=HH/timestamp.csv
 func (e *Exporter) generateS3Key(timestamp time.Time) string {
 	pattern := e.PartitionPattern
 	if pattern == "" {
@@ -159,7 +167,7 @@ func (e *Exporter) generateS3Key(timestamp time.Time) string {
 	pattern = strings.ReplaceAll(pattern, "%d", fmt.Sprintf("%02d", timestamp.Day()))
 	pattern = strings.ReplaceAll(pattern, "%H", fmt.Sprintf("%02d", timestamp.Hour()))
 
-	filename := fmt.Sprintf("%s.json", timestamp.Format("20060102-150405-000"))
+	filename := fmt.Sprintf("%s.csv", timestamp.Format("20060102-150405-000"))
 
 	if e.Prefix != "" {
 		return fmt.Sprintf("%s/%s/%s", e.Prefix, pattern, filename)
