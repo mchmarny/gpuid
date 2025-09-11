@@ -47,25 +47,26 @@ env:
 env:
   - name: EXPORTER_TYPE
     value: 'postgres'
-  - name: POSTGRES_HOST
-    value: 'postgresql.database.svc.cluster.local'
   - name: POSTGRES_PORT
     value: '5432'
   - name: POSTGRES_DB
     value: 'gpuid'
-  - name: POSTGRES_SSLMODE
-    value: 'require'
   - name: POSTGRES_TABLE
     value: 'serials'
+  - name: POSTGRES_HOST
+    valueFrom:
+      secretKeyRef:
+        name: db-credentials
+        key: host
   - name: POSTGRES_USER
     valueFrom:
       secretKeyRef:
-        name: postgresql-credentials
+        name: db-credentials
         key: username
   - name: POSTGRES_PASSWORD
     valueFrom:
       secretKeyRef:
-        name: postgresql-credentials
+        name: db-credentials
         key: password
 ```
 
@@ -223,10 +224,34 @@ CREATE TABLE serials (
 );
 
 -- Optimized indexes for common query patterns
-CREATE INDEX idx_gpu_serial_readings_cluster ON gpu_serial_readings (cluster);
-CREATE INDEX idx_gpu_serial_readings_node ON gpu_serial_readings (node);
-CREATE INDEX idx_gpu_serial_readings_read_time ON gpu_serial_readings (read_time);
-CREATE INDEX idx_gpu_serial_readings_created_at ON gpu_serial_readings (created_at);
+CREATE INDEX idx_serials_cluster ON serials (cluster);
+CREATE INDEX idx_serials_node ON serials (node);
+CREATE INDEX idx_serials_read_time ON serials (read_time);
+CREATE INDEX idx_serials_created_at ON serials (created_at);
+```
+
+Few queries: 
+
+
+Nodes in hosts: 
+
+```sql
+SELECT cluster, COUNT(DISTINCT node) AS nodes_per_cluster
+FROM serials GROUP BY cluster ORDER BY cluster;
+```
+
+GPUs in hosts: 
+
+```sql
+SELECT gpu, COUNT(DISTINCT machine) AS gpus_in_machines
+FROM serials GROUP BY gpu ORDER BY gpu;
+```
+
+GPUs in k8s nodes: 
+
+```sql
+SELECT node, COUNT(DISTINCT gpu) AS gpus_per_machine
+FROM serials GROUP BY machine ORDER BY machine;
 ```
 
 ### S3 Object Structure

@@ -10,28 +10,31 @@ spec:
       containers:
         - name: gpuid
           env:
+            - name: CLUSTER_NAME
+              value: 'validation'
             - name: EXPORTER_TYPE
               value: 'postgres'
-            - name: POSTGRES_HOST
-              value: 'postgresql.database.svc.cluster.local'
             - name: POSTGRES_PORT
               value: '5432'
             - name: POSTGRES_DB
-              value: 'gpus'
+              value: 'gpuid'
+            - name: POSTGRES_TABLE
+              value: 'serials'
+            - name: POSTGRES_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: host
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgresql-credentials
+                  name: db-credentials
                   key: username
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgresql-credentials
+                  name: db-credentials
                   key: password
-            - name: POSTGRES_SSLMODE
-              value: 'require'
-            - name: POSTGRES_TABLE
-              value: 'gpus'
       tolerations:
         - key: dedicated
           operator: Equal
