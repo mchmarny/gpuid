@@ -52,7 +52,11 @@ env:
   - name: POSTGRES_PORT
     value: '5432'
   - name: POSTGRES_DB
-    value: 'gpu_monitoring'
+    value: 'gpuid'
+  - name: POSTGRES_SSLMODE
+    value: 'require'
+  - name: POSTGRES_TABLE
+    value: 'serials'
   - name: POSTGRES_USER
     valueFrom:
       secretKeyRef:
@@ -63,10 +67,6 @@ env:
       secretKeyRef:
         name: postgresql-credentials
         key: password
-  - name: POSTGRES_SSLMODE
-    value: 'require'
-  - name: POSTGRES_TABLE
-    value: 'gpu_serial_readings'
 ```
 
 ### Amazon S3 Exporter
@@ -210,7 +210,7 @@ GPU serial number readings are exported in a consistent schema across all backen
 When using the PostgreSQL exporter, data is stored in the following table structure:
 
 ```sql
-CREATE TABLE gpu_serial_readings (
+CREATE TABLE serials (
     id BIGSERIAL PRIMARY KEY,
     cluster VARCHAR(255) NOT NULL,
     node VARCHAR(255) NOT NULL, 
