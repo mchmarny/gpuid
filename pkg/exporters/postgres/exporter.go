@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	// PostgreSQL driver import - required for database/sql driver registration
 	_ "github.com/lib/pq"
 	"github.com/mchmarny/gpuid/pkg/gpu"
 )
@@ -20,7 +21,7 @@ const (
 	EnvPostgresPort     = "POSTGRES_PORT"
 	EnvPostgresDB       = "POSTGRES_DB"
 	EnvPostgresUser     = "POSTGRES_USER"
-	EnvPostgresPassword = "POSTGRES_PASSWORD"
+	EnvPostgresPassword = "POSTGRES_PASSWORD" // #nosec G101 - This is an environment variable name, not a credential
 	EnvPostgresSSLMode  = "POSTGRES_SSLMODE"
 	EnvPostgresTable    = "POSTGRES_TABLE"
 
@@ -28,6 +29,9 @@ const (
 	defaultPostgresPort  = 5432
 	defaultPostgresTable = "gpu"
 	defaultSSLMode       = "require"
+
+	// SQL query template for inserting GPU serial readings
+	insertQueryTemplate = `INSERT INTO %s (cluster, node, machine, source, gpu, read_time, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`
 )
 
 // Config holds PostgreSQL-specific configuration parameters.
@@ -60,13 +64,10 @@ type Exporter struct {
 //   - POSTGRES_SSLMODE: SSL mode (defaults to require)
 //   - POSTGRES_TABLE: Table name (defaults to gpu_serial_readings)
 func New(ctx context.Context) (*Exporter, error) {
-	config, err := loadConfigFromEnv()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load PostgreSQL configuration from environment: %w", err)
-	}
+	config := loadConfigFromEnv()
 
-	if err := config.Validate(); err != nil {
-		return nil, fmt.Errorf("PostgreSQL configuration validation failed: %w", err)
+	if validationErr := config.Validate(); validationErr != nil {
+		return nil, fmt.Errorf("PostgreSQL configuration validation failed: %w", validationErr)
 	}
 
 	// Create connection string
@@ -115,13 +116,20 @@ func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.S
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback() // Will be ignored if tx.Commit() succeeds
+	defer func() {
+		if err != nil {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				log.Error("transaction rollback failed", "error", rbErr)
+			}
+			return
+		}
+		if cmErr := tx.Commit(); cmErr != nil {
+			err = fmt.Errorf("failed to commit transaction: %w", cmErr)
+		}
+	}()
 
 	// Prepare batch insert statement
-	query := fmt.Sprintf(`
-		INSERT INTO %s (cluster, node, machine, source, gpu, read_time, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		e.config.Table)
+	query := fmt.Sprintf(insertQueryTemplate, e.config.Table)
 
 	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
@@ -164,7 +172,7 @@ func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.S
 }
 
 // Close performs cleanup of PostgreSQL connection resources.
-func (e *Exporter) Close(ctx context.Context) error {
+func (e *Exporter) Close(_ context.Context) error {
 	if e.db != nil {
 		return e.db.Close()
 	}
@@ -226,7 +234,7 @@ func (e *Exporter) initializeSchema(ctx context.Context) error {
 }
 
 // loadConfigFromEnv extracts PostgreSQL configuration from environment variables.
-func loadConfigFromEnv() (Config, error) {
+func loadConfigFromEnv() Config {
 	config := Config{
 		Host:     getEnv(EnvPostgresHost, ""),
 		Port:     getEnvAsInt(EnvPostgresPort, defaultPostgresPort),
@@ -237,7 +245,7 @@ func loadConfigFromEnv() (Config, error) {
 		Table:    getEnv(EnvPostgresTable, defaultPostgresTable),
 	}
 
-	return config, nil
+	return config
 }
 
 // ConnectionString builds a PostgreSQL connection string from the configuration.
