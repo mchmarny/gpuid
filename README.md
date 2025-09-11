@@ -17,12 +17,11 @@ The `gpuid` service provides a lightweight, scalable solution for GPU inventory 
 
 ## Features
 
-- **Multiple Export Backends**: Support for stdout, PostgreSQL, and Amazon S3 (PubSub, SQS support coming)
-- **12-Factor App Compliance**: Environment variable-based configuration
-- **Real-life Ready**: Connection pooling, retry logic, health checks
+- **Configurable Backends**: Support for stdout, PostgreSQL, and Amazon S3 (PubSub, SQS support coming)
+- **Scale Ready**: Connection pooling, retry logic, health checks
 - **Structured Logging**: JSON-formatted logs with contextual information
-- **Metrics Integration**: Prometheus-compatible metrics for monitoring
-- **Security**: SLSA attestation and Sigstore validation support 
+- **Emitting Metrics**: Prometheus-compatible metrics for monitoring
+- **Supply Chain Secure**: SLSA attestation and Sigstore validation support 
 
 ## Available Exporters
 
