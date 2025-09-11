@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/mchmarny/gpuid/pkg/counter"
@@ -242,9 +243,8 @@ func podReady(p *corev1.Pod) bool {
 // This prevents duplicate command executions while allowing memory cleanup over time.
 // In a multi-replica controller setup, this would need to be replaced with a distributed cache.
 type uidSet struct {
-	// Using a simple map here instead of sync.Map because access patterns are simple
-	// and the occasional race condition during cleanup is acceptable
-	m map[string]time.Time
+	mu sync.RWMutex
+	m  map[string]time.Time
 }
 
 func newUIDSet() *uidSet { return &uidSet{m: make(map[string]time.Time)} }
@@ -253,18 +253,24 @@ func newUIDSet() *uidSet { return &uidSet{m: make(map[string]time.Time)} }
 // The 30-minute expiration prevents unbounded memory growth while allowing reasonable
 // protection against duplicate processing.
 func (s *uidSet) Has(uid string) bool {
-	// Expire old entries (best effort cleanup)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Expire old entries (cleanup during read to spread the cost)
 	now := time.Now()
 	for k, t := range s.m {
 		if now.Sub(t) > 30*time.Minute {
 			delete(s.m, k)
 		}
 	}
+
 	_, exists := s.m[uid]
 	return exists
 }
 
 // Add marks a UID as processed with the current timestamp.
 func (s *uidSet) Add(uid string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.m[uid] = time.Now()
 }
