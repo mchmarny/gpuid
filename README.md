@@ -77,58 +77,62 @@ env:
 
 ```yaml
 env:
+  # GPU Serial Number Provider
+  - name: CLUSTER_NAME
+    value: 'validation'
+  - name: NAMESPACE
+    value: 'gpu-operator'
+  - name: LABEL_SELECTOR
+    value: 'app=nvidia-device-plugin-daemonset'
+  # S3 Exporter Configuration
   - name: EXPORTER_TYPE
     value: 's3'
   - name: S3_BUCKET
-    value: 'gpu-monitoring-data'
+    value: 'gpuids'
   - name: S3_PREFIX
-    value: 'gpu-serials'
+    value: 'serial-numbers'
   - name: S3_REGION
-    value: 'us-west-2'
+    value: 'us-east-1'
   - name: S3_PARTITION_PATTERN
     value: 'year=%Y/month=%m/day=%d/hour=%H'
+  # AWS Credentials from Kubernetes Secret
+  - name: AWS_ACCESS_KEY_ID
+    valueFrom:
+      secretKeyRef:
+        name: s3-credentials
+        key: AWS_ACCESS_KEY_ID
+  - name: AWS_SECRET_ACCESS_KEY
+    valueFrom:
+      secretKeyRef:
+        name: s3-credentials
+        key: AWS_SECRET_ACCESS_KEY
 ```
 
 ## Usage
 
 ### Deployment
 
-1. **Configure the deployment** by updating `deployment/overlays/prod/patch-deployment.yaml`:
-
-```yaml
-# Core service configuration
-env:
-  - name: CLUSTER_NAME
-    value: 'production-cluster'  # Unique cluster identifier
-  - name: NAMESPACE
-    value: 'gpu-operator'        # Target namespace for GPU pods
-  - name: LABEL_SELECTOR
-    value: 'app=nvidia-device-plugin-daemonset'  # Pod selector
-  
-  # Exporter configuration (choose one)
-  - name: EXPORTER_TYPE
-    value: 'postgres'  # Options: stdout, postgres, s3
-  
-  # Batch processing configuration
-  - name: BATCH_SIZE
-    value: '100'       # Records per batch (optional, default: 10)
-  - name: RETRY_COUNT
-    value: '3'         # Retry attempts (optional, default: 2)
-  - name: TIMEOUT
-    value: '30'        # Timeout in seconds (optional, default: 30)
-```
+1. **Configure the deployment** by updating the specific overlay that corresponds to your backend. For example, for S3 `deployment/overlays/s3/patch-deployment.yaml`:
 
 2. **Apply the configuration**:
 
 ```shell
-kubectl apply -k deployment/overlays/prod
+kubectl apply -k deployment/overlays/s3
+```
+
+1. **Create referenced secrets**:
+
+```shell
+kubectl create secret generic s3-credentials -n gpuid \
+  --from-literal="AWS_ACCESS_KEY_ID=$GPUID_S3_KEY" \
+  --from-literal="AWS_SECRET_ACCESS_KEY=$GPUID_S3_SECRET"
 ```
 
 3. **Verify deployment**:
 
 ```shell
 kubectl -n gpuid get pods -l app=gpuid
-kubectl -n gpuid logs -l app=gpuid --tail=10
+kubectl -n gpuid logs -l app=gpuid --tail=-1
 ```
 
 ### Monitoring and Observability
@@ -141,40 +145,17 @@ kubectl -n gpuid logs -l app=gpuid -f
 
 **Filter logs with jq** for specific information:
 
+Show error events:
+
 ```shell
-# Show GPU serial exports
-kubectl -n gpuid logs -l app=gpuid --tail=-1 \
-  | jq -r 'select(.msg == "exported GPU serials") | "\(.cluster) \(.node) \(.gpu_count) GPUs"'
-
-# Show health check results  
-kubectl -n gpuid logs -l app=gpuid --tail=-1 \
-  | jq -r 'select(.msg == "exporter health check") | "\(.time) \(.exporter_type) \(.status)"'
-
-# Show error events
 kubectl -n gpuid logs -l app=gpuid --tail=-1 \
   | jq -r 'select(.level == "ERROR") | "\(.time) \(.msg) \(.error)"'
-```
-
-**Sample JSON Output**:
-```json
-{
-  "time": "2025-09-10T10:30:45Z",
-  "level": "INFO",
-  "msg": "exported GPU serials",
-  "cluster": "production-cluster", 
-  "node": "gpu-node-01",
-  "machine": "i-1234567890abcdef0",
-  "source": "gpu-operator/nvidia-device-plugin-abc123",
-  "gpu_count": 4,
-  "exporter_type": "postgres",
-  "duration": "145ms"
-}
 ```
 
 ### Cleanup
 
 ```shell
-kubectl delete -k deployment/overlays/prod
+kubectl delete -k deployment/overlays/s3
 ```
 
 ## Metrics and Monitoring

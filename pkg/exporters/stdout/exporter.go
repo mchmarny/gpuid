@@ -21,7 +21,7 @@ type Exporter struct{}
 
 // Write outputs GPU serial number readings to stdout as JSON.
 // Each record is written as a separate JSON line (NDJSON format) for better log parsing.
-func (e *Exporter) Write(_ context.Context, _ *slog.Logger, records []*gpu.SerialNumberReading) error {
+func (e *Exporter) Write(_ context.Context, log *slog.Logger, records []*gpu.SerialNumberReading) error {
 	if records == nil {
 		return fmt.Errorf("records is nil")
 	}
@@ -39,6 +39,8 @@ func (e *Exporter) Write(_ context.Context, _ *slog.Logger, records []*gpu.Seria
 			return fmt.Errorf("failed to encode reading: %w", err)
 		}
 	}
+
+	log.Info("export completed", "records", len(records))
 
 	return nil
 }

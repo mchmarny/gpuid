@@ -156,7 +156,6 @@ func (e *Exporter) Export(ctx context.Context, log *slog.Logger, cluster string,
 
 	// Transform serials into structured readings with proper provenance
 	records := make([]*gpu.SerialNumberReading, 0, len(serials))
-	timestamp := time.Now().UTC()
 
 	for _, sn := range serials {
 		if strings.TrimSpace(sn) == "" {
@@ -164,12 +163,12 @@ func (e *Exporter) Export(ctx context.Context, log *slog.Logger, cluster string,
 		}
 
 		record := &gpu.SerialNumberReading{
-			Cluster:  cluster,
-			Node:     pod.Spec.NodeName,
-			Machine:  node,
-			Source:   fmt.Sprintf("%s/%s", pod.Namespace, pod.Name),
-			GPU:      sn,
-			ReadTime: timestamp,
+			Cluster: cluster,
+			Node:    pod.Spec.NodeName,
+			Machine: node,
+			Source:  fmt.Sprintf("%s/%s", pod.Namespace, pod.Name),
+			GPU:     sn,
+			Time:    time.Now().UTC(),
 		}
 
 		// Validate record before adding to batch

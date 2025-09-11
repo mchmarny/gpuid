@@ -120,7 +120,7 @@ func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.S
 		return fmt.Errorf("failed to upload records to S3: %w", err)
 	}
 
-	log.Info("S3 export completed (simulated)",
+	log.Info("export completed",
 		"bucket", e.Bucket,
 		"key", key,
 		"records", len(records),

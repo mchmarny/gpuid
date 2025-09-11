@@ -150,7 +150,7 @@ func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.S
 			record.Machine,
 			record.Source,
 			record.GPU,
-			record.ReadTime,
+			record.Time,
 			now,
 		)
 		if err != nil {
@@ -163,7 +163,7 @@ func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.S
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	log.Info("postgres export completed",
+	log.Info("export completed",
 		"table", e.config.Table,
 		"records", len(records),
 		"database", e.config.Database)
