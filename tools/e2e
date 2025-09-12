@@ -22,9 +22,25 @@ trap cleanup EXIT
 # Wait for nodes to be ready
 kubectl wait --for=condition=Ready node --all --timeout=120s
 
-# Tag Nodes
+# Tag worker nodes with GPU label
 kubectl get nodes -l '!node-role.kubernetes.io/control-plane' -o name | \
-  xargs -I {} kubectl label {} run.ai/simulated-gpu-node-pool=gpu --overwrite
+  xargs -I {} kubectl label {} nodeGroup=gpu-worker --overwrite
+
+# Create namespace if it doesn't exist
+if ! kubectl get ns gpu-operator >/dev/null 2>&1; then
+  kubectl create ns gpu-operator
+fi
+
+# Create config map for faker XML data
+kubectl create cm smi-faker-data -n gpu-operator \
+  --from-file=nvidia-smi.xml=pkg/faker/h100.xml --dry-run=client -o yaml | \
+  kubectl apply -f -
+
+# TODO: GPU operator validation
+
+# Deploy fake nvidia-smi on all nodes with nodeGroup=gpu-worker label
+msg "Deploying fake nvidia-smi on gpu-worker nodes..."
+kubectl apply -f deployment/faker
 
 # Apply dev deployment
 kubectl apply -k deployment/overlays/stdout

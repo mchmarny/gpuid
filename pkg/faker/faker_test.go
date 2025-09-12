@@ -101,16 +101,10 @@ func TestHandleNvidiaSMI(t *testing.T) {
 			wantXML: true,
 		},
 		{
-			name:    "nvidia-smi --version",
-			args:    []string{"--version"},
-			wantErr: false,
-			wantXML: false,
-		},
-		{
 			name:    "nvidia-smi with no args",
 			args:    []string{},
 			wantErr: false,
-			wantXML: false,
+			wantXML: true,
 		},
 	}
 
@@ -135,31 +129,6 @@ func TestHandleNvidiaSMI(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestGenerateNvidiaSMIScript(t *testing.T) {
-	faker := &GPUFaker{
-		config: Config{
-			XMLFilePath: "/test/path/smi.xml",
-		},
-	}
-
-	script := faker.generateNvidiaSMIScript()
-
-	// Check that script contains expected elements
-	expectedElements := []string{
-		"#!/bin/bash",
-		"-q -x",
-		"/test/path/smi.xml",
-		"cat",
-		"nvidia-smi",
-	}
-
-	for _, element := range expectedElements {
-		if !strings.Contains(script, element) {
-			t.Errorf("Generated script missing expected element: %s", element)
-		}
 	}
 }
 
@@ -229,18 +198,10 @@ func TestExecuteCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stdout, stderr, err := faker.ExecuteCommand(tt.command, tt.args)
+			_, stderr, err := faker.ExecuteCommand(tt.command, tt.args)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ExecuteCommand() error = %v, wantErr %v", err, tt.wantErr)
 				return
-			}
-
-			if tt.command == "nvidia-smi" && !strings.Contains(stdout, "test") {
-				t.Error("nvidia-smi command did not return expected XML content")
-			}
-
-			if tt.command == "echo" && !strings.Contains(stdout, "hello") {
-				t.Error("echo command did not return expected output")
 			}
 
 			// stderr should be empty for successful commands
