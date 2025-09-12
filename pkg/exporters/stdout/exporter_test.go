@@ -1,6 +1,8 @@
 package stdout
 
 import (
+	"context"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -109,4 +111,88 @@ func TestExporter_RecordValidation(t *testing.T) {
 	}
 
 	t.Log("Record validation working correctly")
+}
+
+// TestExporter_Write tests the Write method
+func TestExporter_Write(t *testing.T) {
+	ctx := context.Background()
+	log := slog.Default()
+	exporter := New()
+
+	tests := []struct {
+		name    string
+		records []*gpu.SerialNumberReading
+		wantErr bool
+	}{
+		{
+			name:    "nil records",
+			records: nil,
+			wantErr: true,
+		},
+		{
+			name:    "empty records",
+			records: []*gpu.SerialNumberReading{},
+			wantErr: false,
+		},
+		{
+			name: "valid records",
+			records: []*gpu.SerialNumberReading{
+				{
+					Cluster: "test-cluster",
+					Node:    "test-node",
+					Machine: "test-machine",
+					Source:  "test-namespace/test-pod",
+					GPU:     "GPU-12345",
+					Time:    time.Date(2025, 9, 11, 10, 30, 0, 0, time.UTC),
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "records with nil entry",
+			records: []*gpu.SerialNumberReading{
+				nil,
+				{
+					Cluster: "test-cluster",
+					Node:    "test-node",
+					Machine: "test-machine",
+					Source:  "test-namespace/test-pod",
+					GPU:     "GPU-12345",
+					Time:    time.Date(2025, 9, 11, 10, 30, 0, 0, time.UTC),
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := exporter.Write(ctx, log, tt.records)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Write() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestExporter_Close tests the Close method
+func TestExporter_Close(t *testing.T) {
+	ctx := context.Background()
+	exporter := New()
+
+	err := exporter.Close(ctx)
+	if err != nil {
+		t.Errorf("Close() error = %v, want nil", err)
+	}
+}
+
+// TestExporter_Health tests the Health method
+func TestExporter_Health(t *testing.T) {
+	ctx := context.Background()
+	exporter := New()
+
+	err := exporter.Health(ctx)
+	if err != nil {
+		t.Errorf("Health() error = %v, want nil", err)
+	}
 }

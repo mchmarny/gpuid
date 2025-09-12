@@ -1,9 +1,13 @@
 package server
 
 import (
+	"context"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/mchmarny/gpuid/pkg/logger"
 )
@@ -89,4 +93,133 @@ func TestNewServer_DefaultsAndOptions(t *testing.T) {
 	if impl.port != 4321 {
 		t.Errorf("expected port 4321, got %d", impl.port)
 	}
+}
+
+// TestServer_Serve tests the server's ability to start and handle requests
+func TestServer_Serve(t *testing.T) {
+	log := logger.NewTestLogger(t)
+
+	// Find an available port
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("Failed to find available port: %v", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+
+	server := NewServer(WithLogger(log), WithPort(port))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Start server in goroutine
+	done := make(chan bool)
+	go func() {
+		defer close(done)
+		server.Serve(ctx, map[string]http.Handler{
+			"/test": http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, "test response")
+			}),
+		})
+	}()
+
+	// Give server time to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Test health endpoints
+	client := &http.Client{Timeout: time.Second}
+
+	endpoints := []string{"/healthz", "/readyz", "/"}
+	for _, endpoint := range endpoints {
+		url := fmt.Sprintf("http://localhost:%d%s", port, endpoint)
+		response, getErr := client.Get(url)
+		if getErr != nil {
+			t.Errorf("Failed to connect to %s: %v", endpoint, getErr)
+			continue
+		}
+		response.Body.Close()
+
+		if response.StatusCode != http.StatusOK {
+			t.Errorf("Expected status 200 for %s, got %d", endpoint, response.StatusCode)
+		}
+	}
+
+	// Test custom handler
+	testURL := fmt.Sprintf("http://localhost:%d/test", port)
+	testResp, err := client.Get(testURL)
+	if err != nil {
+		t.Errorf("Failed to connect to /test: %v", err)
+	} else {
+		testResp.Body.Close()
+		if testResp.StatusCode != http.StatusOK {
+			t.Errorf("Expected status 200 for /test, got %d", testResp.StatusCode)
+		}
+	}
+
+	// Cancel context to stop server
+	cancel()
+
+	// Wait for server to shutdown
+	select {
+	case <-done:
+		// Server stopped successfully
+	case <-time.After(2 * time.Second):
+		t.Error("Server did not stop within timeout")
+	}
+
+	// Give extra time for any goroutine cleanup to complete
+	time.Sleep(100 * time.Millisecond)
+}
+
+// TestServer_ServeWithNilHandlers tests server with nil handlers map
+func TestServer_ServeWithNilHandlers(t *testing.T) {
+	log := logger.NewTestLogger(t)
+
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("Failed to find available port: %v", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+
+	server := NewServer(WithLogger(log), WithPort(port))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	done := make(chan bool)
+	go func() {
+		defer close(done)
+		server.Serve(ctx, nil) // Pass nil handlers
+	}()
+
+	// Give server time to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Test that health endpoints still work
+	client := &http.Client{Timeout: 100 * time.Millisecond}
+	url := fmt.Sprintf("http://localhost:%d/healthz", port)
+	resp, err := client.Get(url)
+	if err != nil {
+		t.Errorf("Failed to connect to /healthz: %v", err)
+	} else {
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("Expected status 200 for /healthz, got %d", resp.StatusCode)
+		}
+	}
+
+	cancel()
+
+	// Wait for server to shutdown with timeout
+	select {
+	case <-done:
+		// Server stopped successfully
+	case <-time.After(500 * time.Millisecond):
+		t.Error("Server did not stop within timeout")
+	}
+
+	// Give extra time for any goroutine cleanup to complete
+	time.Sleep(100 * time.Millisecond)
 }
