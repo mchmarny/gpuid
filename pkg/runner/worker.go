@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand"
-	"sync"
 	"time"
 
 	"github.com/mchmarny/gpuid/pkg/counter"
@@ -19,14 +18,9 @@ import (
 )
 
 var (
-	// processed tracks UIDs that have already been processed to prevent duplicate executions.
-	// Using a global variable here is safe because the controller ensures only one instance runs,
-	// but in a multi-instance setup, this would need to be stored in a distributed cache.
-	processed = newUIDSet()
-
 	// Metrics for monitoring command execution outcomes.
-	okCounter  = counter.New("gpuid_export_success_total", "Total number of successful export executions", "node", "pod")
-	errCounter = counter.New("gpuid_export_failure_total", "Total number of failed export executions", "node", "pod")
+	counterSuccess = counter.New("gpuid_export_success_total", "Total number of successful export executions", "node", "pod")
+	counterErr     = counter.New("gpuid_export_failure_total", "Total number of failed export executions", "node", "pod")
 )
 
 // do processes items from the work queue in a loop until the context is canceled.
@@ -151,7 +145,7 @@ func processPod(
 	// Get GPU serial numbers from the pod
 	serials, err := gpu.GetSerialNumbers(pctx, log, cs, cfg, pod, cmd.Container)
 	if err != nil {
-		errCounter.Increment(pod.Spec.NodeName, pod.Name)
+		counterErr.Increment(pod.Spec.NodeName, pod.Name)
 		log.Warn("failed to get GPU serial numbers",
 			"pod", pod.Name,
 			"uid", pod.UID,
@@ -164,7 +158,7 @@ func processPod(
 	// Retrieve node provider ID for export metadata
 	nodeInfo, err := node.GetNodeProviderID(pctx, log, cs, cfg, pod.Spec.NodeName)
 	if err != nil {
-		errCounter.Increment(pod.Spec.NodeName, pod.Name)
+		counterErr.Increment(pod.Spec.NodeName, pod.Name)
 		log.Warn("failed to get node provider ID",
 			"pod", pod.Name,
 			"uid", pod.UID,
@@ -173,8 +167,9 @@ func processPod(
 		)
 		return fmt.Errorf("failed to get node provider ID: %w", err)
 	}
+
 	if nodeInfo.Identifier == "" {
-		errCounter.Increment(pod.Spec.NodeName, pod.Name)
+		counterErr.Increment(pod.Spec.NodeName, pod.Name)
 		log.Warn("node provider ID is empty",
 			"pod", pod.Name,
 			"uid", pod.UID,
@@ -185,7 +180,7 @@ func processPod(
 
 	// Export the serial numbers using the specified exporter
 	if err := cmd.exporter.Export(pctx, log, cmd.Cluster, pod, nodeInfo.Identifier, serials); err != nil {
-		errCounter.Increment(pod.Spec.NodeName, pod.Name)
+		counterErr.Increment(pod.Spec.NodeName, pod.Name)
 		log.Error("failed to export GPU serial numbers",
 			"exporter", cmd.ExporterType,
 			"pod", pod.Name,
@@ -198,7 +193,7 @@ func processPod(
 	}
 
 	// Increment success metric
-	okCounter.Increment(pod.Spec.NodeName, pod.Name)
+	counterSuccess.Increment(pod.Spec.NodeName, pod.Name)
 
 	// Success case
 	log.Debug("pod processed successfully",
@@ -235,42 +230,4 @@ func podReady(p *corev1.Pod) bool {
 	}
 
 	return true
-}
-
-// trim truncates output strings to prevent log spam while preserving useful information.
-// Large outputs from commands can overwhelm logging systems in distributed environments.
-// uidSet provides a thread-safe way to track processed pod UIDs with automatic expiration.
-// This prevents duplicate command executions while allowing memory cleanup over time.
-// In a multi-replica controller setup, this would need to be replaced with a distributed cache.
-type uidSet struct {
-	mu sync.RWMutex
-	m  map[string]time.Time
-}
-
-func newUIDSet() *uidSet { return &uidSet{m: make(map[string]time.Time)} }
-
-// Has checks if a UID has been processed and performs best-effort cleanup of old entries.
-// The 30-minute expiration prevents unbounded memory growth while allowing reasonable
-// protection against duplicate processing.
-func (s *uidSet) Has(uid string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Expire old entries (cleanup during read to spread the cost)
-	now := time.Now()
-	for k, t := range s.m {
-		if now.Sub(t) > 30*time.Minute {
-			delete(s.m, k)
-		}
-	}
-
-	_, exists := s.m[uid]
-	return exists
-}
-
-// Add marks a UID as processed with the current timestamp.
-func (s *uidSet) Add(uid string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.m[uid] = time.Now()
 }

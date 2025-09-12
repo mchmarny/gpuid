@@ -17,13 +17,20 @@ The `gpuid` service provides a lightweight, scalable solution for GPU inventory 
 
 ## Features
 
-- **Configurable Backends**: Support for stdout, PostgreSQL DB, and Amazon S3 bucket
-- **Scale Ready**: Connection pooling, retry logic, health checks
-- **Structured Logging**: JSON-formatted logs with contextual information
-- **Emitting Metrics**: Prometheus-compatible metrics for monitoring
-- **Supply Chain Secure**: SLSA attestation and Sigstore validation support 
+- HTTP, PostgreSQL DB, and S3 exporters
+- Connection pooling, retry logic, health checks
+- Structured logging with contextual information
+- Prometheus-compatible observability metrics for monitoring
+- SLSA build attestation and Sigstore attestation validation
 
 ## Available Exporters
+
+**gpuid** supports multiple data export backends:
+
+* **StdOut**: Development and debugging
+* **HTTP**: POSTs to HTTP endpoints
+* **PostgreSQL**: Batch inserts into PostgreSQL database
+* **S3**: Puts CSV object into S3-compatible bucket
 
 ### Stdout Exporter
 
@@ -35,7 +42,33 @@ The `gpuid` service provides a lightweight, scalable solution for GPU inventory 
 env:
   - name: EXPORTER_TYPE
     value: 'stdout'
+  - name: CLUSTER_NAME
+    value: 'validation'
 ```
+
+### HTTP Exporter
+
+**Type**: `http`
+**Purpose**: Send GPU data to HTTP endpoints via POST requests
+**Features**: Bearer token authentication, configurable timeouts, automatic retries
+
+```yaml
+env:
+  - name: EXPORTER_TYPE
+    value: 'http'
+  - name: CLUSTER_NAME
+    value: 'validation'
+  - name: HTTP_ENDPOINT
+    value: 'https://api.example.com/gpu-data'
+  - name: HTTP_TIMEOUT
+    value: '30s'
+  - name: HTTP_AUTH_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: http-credentials
+        key: token
+```
+
 
 ### PostgreSQL Exporter
 
@@ -47,6 +80,8 @@ env:
 env:
   - name: EXPORTER_TYPE
     value: 'postgres'
+  - name: CLUSTER_NAME
+    value: 'validation'
   - name: POSTGRES_PORT
     value: '5432'
   - name: POSTGRES_DB
@@ -78,16 +113,16 @@ env:
 
 ```yaml
 env:
-  # GPU Serial Number Provider
+  - name: EXPORTER_TYPE
+    value: 's3'
   - name: CLUSTER_NAME
     value: 'validation'
+  # GPU Serial Number Provider
   - name: NAMESPACE
     value: 'gpu-operator'
   - name: LABEL_SELECTOR
     value: 'app=nvidia-device-plugin-daemonset'
   # S3 Exporter Configuration
-  - name: EXPORTER_TYPE
-    value: 's3'
   - name: S3_BUCKET
     value: 'gpuids'
   - name: S3_PREFIX
@@ -113,40 +148,40 @@ env:
 
 ### Deployment
 
-1. **Configure the deployment** by updating the specific overlay that corresponds to your backend. For example, for S3 `deployment/overlays/s3/patch-deployment.yaml`:
+1. **Configure the deployment** by updating the specific overlay that corresponds to your backend type:
 
-2. **Apply the configuration**:
+* http - [deployment/overlays/http/patch-deployment.yaml](deployment/overlays/http/patch-deployment.yaml)   
+* postgres - [deployment/overlays/postgres/patch-deployment.yaml](deployment/overlays/postgres/patch-deployment.yaml)
+* s3 - [deployment/overlays/s3/patch-deployment.yaml](deployment/overlays/s3/patch-deployment.yaml)
+* stdout - [deployment/overlays/stdout/patch-deployment.yaml](deployment/overlays/stdout/patch-deployment.yaml)
+
+1. **Apply the configuration**
+
+For example, to deploy with S3 backend:
 
 ```shell
 kubectl apply -k deployment/overlays/s3
 ```
 
-1. **Create referenced secrets**:
+1. **Verify deployment**
 
-```shell
-kubectl create secret generic s3-credentials -n gpuid \
-  --from-literal="AWS_ACCESS_KEY_ID=$GPUID_S3_KEY" \
-  --from-literal="AWS_SECRET_ACCESS_KEY=$GPUID_S3_SECRET"
-```
-
-3. **Verify deployment**:
+Make sure the exporter pod is running:
 
 ```shell
 kubectl -n gpuid get pods -l app=gpuid
+```
+
+And review its logs: 
+
+```shell
 kubectl -n gpuid logs -l app=gpuid --tail=-1
 ```
 
 ### Monitoring and Observability
 
-**Structured Logging**: `gpuid` emits JSON-formatted logs with contextual information:
+`gpuid` emits structured logs in JSON format with contextual information:
 
-```shell
-kubectl -n gpuid logs -l app=gpuid -f
-```
-
-**Filter logs with jq** for specific information:
-
-Show error events:
+Since these logs are in JSON, you can filter them with `jq` for specific information, for example, error events:
 
 ```shell
 kubectl -n gpuid logs -l app=gpuid --tail=-1 \
@@ -161,30 +196,25 @@ kubectl delete -k deployment/overlays/s3
 
 ## Metrics and Monitoring
 
-The `gpuid` service exposes Prometheus-compatible metrics on `:8080/metrics`:
+The `gpuid` service exposes Prometheus-compatible metrics on the `:8080/metrics` endpoint:
 
-- `gpuid_export_success_total{exporter_type, cluster}`: Successful export operations
-- `gpuid_export_failure_total{exporter_type, cluster, error_type}`: Failed export operations  
-- `gpuid_export_duration_seconds{exporter_type, cluster}`: Export operation duration
-- `gpuid_gpu_count_total{cluster, node}`: Total GPU count by node
-- `gpuid_health_check_success{exporter_type}`: Exporter health check status
+- `gpuid_export_success_total{exporter_type, node, pod}`: Successful export operations
+- `gpuid_export_failure_total{exporter_type, node, pod, error_type}`: Failed export operations
 
-**Sample Prometheus Queries**:
-
-```promql
-# Export success rate by exporter type
-rate(gpuid_export_success_total[5m]) / rate(gpuid_export_total[5m])
-
-# GPU discovery rate across the cluster  
-rate(gpuid_gpu_count_total[5m])
-
-# Export operation P95 latency
-histogram_quantile(0.95, gpuid_export_duration_seconds)
-```
-
-## Data Schema
+## Exported Data Schema
 
 GPU serial number readings are exported in a consistent schema across all backends:
+
+- `cluster`: Kubernetes cluster identifier where the GPUs were observed
+- `node`: Kubernetes node name where GPU was discovered
+- `machine`: VM instance ID or physical machine identifier  
+- `source`: Namespace/Pod name that provided the GPU information
+- `gpu`: GPU serial number from nvidia-smi
+- `read_time`: Timestamp when the reading was taken (RFC3339 format)
+
+### HTTP Post Content
+
+When using HTTP exporter, the content includes the JSON serialized record: 
 
 ```json
 {
@@ -192,19 +222,10 @@ GPU serial number readings are exported in a consistent schema across all backen
   "node": "gpu-node-01", 
   "machine": "i-1234567890abcdef0",
   "source": "gpu-operator/nvidia-device-plugin-abc123",
-  "gpu": "GPU-A100-1234567890",
-  "read_time": "2025-09-10T10:30:45Z"
+  "gpu": "1234567890",
+  "time": "2025-09-10T10:30:45Z"
 }
 ```
-
-**Field Descriptions**:
-
-- `cluster`: Kubernetes cluster identifier
-- `node`: Kubernetes node name where GPU was discovered
-- `machine`: Cloud instance ID or physical machine identifier  
-- `source`: Namespace/pod name that provided the GPU information
-- `gpu`: GPU serial number from nvidia-smi
-- `read_time`: Timestamp when the reading was taken (RFC3339 format)
 
 ### PostgreSQL Schema
 
@@ -232,22 +253,21 @@ CREATE INDEX idx_serials_created_at ON serials (created_at);
 
 Few queries: 
 
-
-Nodes in hosts: 
+Nodes by cluster: 
 
 ```sql
 SELECT cluster, COUNT(DISTINCT node) AS nodes_per_cluster
 FROM serials GROUP BY cluster ORDER BY cluster;
 ```
 
-GPUs in hosts: 
+GPUs by machine: 
 
 ```sql
 SELECT gpu, COUNT(DISTINCT machine) AS gpus_in_machines
 FROM serials GROUP BY gpu ORDER BY gpu;
 ```
 
-GPUs in k8s nodes: 
+GPUs by k8s node: 
 
 ```sql
 SELECT node, COUNT(DISTINCT gpu) AS gpus_per_machine
@@ -269,16 +289,14 @@ s3://bucket-name/prefix/
 
 ## Security and Validation
 
-### Container Image Attestation
+The `gpuid` container images are built with SLSA (Supply-chain Levels for Software Artifacts). You can verify the image integrity using Sigstore tools.
 
-The `gpuid` container images are built with SLSA (Supply-chain Levels for Software Artifacts) attestation for enhanced security. You can verify the image integrity using Sigstore tools.
-
-#### Manual Verification 
+### Manual Verification 
 
 > Update the image digest to the version you end up using.
 
 ```shell
-export IMAGE=ghcr.io/mchmarny/gpuid:v0.5.0@sha256:345638126a65cff794a59c620badcd02cdbc100d45f7745b4b42e32a803ff645
+export IMAGE=ghcr.io/mchmarny/gpuid@sha256:0363f051d799ec629e0cf59c3c0d14a1e5a8bfb283f38b99e2e311e763547f8e
 
 cosign verify-attestation \
     --output json \
@@ -288,35 +306,35 @@ cosign verify-attestation \
     $IMAGE 
 ```
 
-#### In-Cluster Policy Enforcement
+### In-Cluster Policy Enforcement
 
 To ensure only verified images are deployed in your cluster:
 
-1. **Enable Sigstore policy validation**:
-
-```shell
-kubectl label namespace gpuid policy.sigstore.dev/include=true
-```
-
-2. **Apply the image policy**:
-
-```shell
-kubectl apply -f deployment/policy/slsa-attestation.yaml
-```
-
-3. **Test the admission policy**:
-
-```shell
-kubectl -n gpuid run test --image=$IMAGE
-```
-
-4. **Install Sigstore Policy Controller** (if not already installed):
+1. Install Sigstore Policy Controller (if not already installed):
 
 ```shell
 kubectl create namespace cosign-system
 helm repo add sigstore https://sigstore.github.io/helm-charts
 helm repo update
 helm install policy-controller -n cosign-system sigstore/policy-controller
+```
+
+2. Enable Sigstore policy validation:
+
+```shell
+kubectl label namespace gpuid policy.sigstore.dev/include=true
+```
+
+3. Apply the image policy:
+
+```shell
+kubectl apply -f deployment/policy/slsa-attestation.yaml
+```
+
+4. Test the admission policy:
+
+```shell
+kubectl -n gpuid run test --image=$IMAGE
 ```
 
 ## Disclaimer

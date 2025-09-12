@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpuid
+  namespace: gpuid
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: gpuid
+          env:
+            - name: CLUSTER_NAME
+              value: 'validation'
+            - name: EXPORTER_TYPE
+              value: 'http'
+            - name: HTTP_ENDPOINT
+              value: 'http://exporter.gpuid.svc.cluster.local/data'
+            - name: HTTP_TIMEOUT
+              value: '30s'
+            - name: HTTP_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: http-credentials
+                  key: token
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: system-workload

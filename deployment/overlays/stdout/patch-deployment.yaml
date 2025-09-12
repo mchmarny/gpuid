@@ -10,15 +10,11 @@ spec:
       containers:
         - name: gpuid
           env:
+            - name: EXPORTER_TYPE
+              value: 'stdout'
             - name: CLUSTER_NAME
               value: 'prod'
             - name: NAMESPACE
               value: 'gpu-operator'
             - name: LABEL_SELECTOR
               value: 'app=nvidia-device-plugin-daemonset'
-            - name: EXPORTER_TYPE
-              value: 'stdout'
-      tolerations:
-        - key: dedicated
-          operator: Equal
-          value: system-workload

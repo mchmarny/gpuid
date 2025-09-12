@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mchmarny/gpuid/pkg/exporters/http"
 	"github.com/mchmarny/gpuid/pkg/exporters/postgres"
 	"github.com/mchmarny/gpuid/pkg/exporters/s3"
 	"github.com/mchmarny/gpuid/pkg/exporters/stdout"
@@ -92,6 +93,11 @@ func GetExporter(ctx context.Context, log *slog.Logger, config ExporterConfig) (
 		e.backend, err = postgres.New(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize PostgreSQL exporter: %w", err)
+		}
+	case "http":
+		e.backend, err = http.New(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize HTTP exporter: %w", err)
 		}
 	default:
 		return nil, fmt.Errorf("unknown exporter type: %s", config.Type)
