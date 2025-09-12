@@ -12,6 +12,7 @@ jobs:
   build:
     env:
       IMAGE_NAME: gpuid
+      FAKER_NAME: smifaker
       GO_VERSION: '1.25.0'
       COSIGN_VERSION: v2.5.0
       KIND_VERSION: '0.29.0'
@@ -41,6 +42,17 @@ jobs:
       with:
         main-path: cmd/gpuid/main.go
         image-uri: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+        go-version: ${{ env.GO_VERSION }}
+        release-version: ${{ github.ref_name }}
+        registry-username: ${{ github.actor }}
+        registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+    # build faker
+    - uses: mchmarny/common/go-build@4b278fa73ed5af7bf52ec0ed57427c2c1104b30a  # v0.1.0
+      id: faker
+      with:
+        main-path: cmd/gpufaker/main.go
+        image-uri: ghcr.io/${{ github.repository_owner }}/${{ env.FAKER_NAME }}
         go-version: ${{ env.GO_VERSION }}
         release-version: ${{ github.ref_name }}
         registry-username: ${{ github.actor }}

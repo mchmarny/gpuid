@@ -34,3 +34,8 @@ go.work.sum
 
 # Policies 
 *.json
+
+# Digests 
+.faker
+.uri
+.digest
