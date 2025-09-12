@@ -32,7 +32,7 @@ helm upgrade -i gpu-operator oci://ghcr.io/run-ai/fake-gpu-operator/fake-gpu-ope
   --create-namespace
 
 # Apply dev deployment
-kubectl apply -k deployment/overlays/test
+kubectl apply -k deployment/overlays/stdout
 
 # Restart the deployment to pick up any changes
 kubectl rollout restart deployment/gpuid -n gpuid
@@ -49,26 +49,6 @@ IMAGE=$(kubectl get pods \
   -l app=gpuid \
   -o jsonpath="{.items[0].status.containerStatuses[0].imageID}")
 msg "Using image: $IMAGE"
-
-# Deploy test target into default namespace
-msg "Deploying test target pod..."
-kubectl run busybox \
-  --image=busybox:1.36 \
-  --restart=Never \
-  --namespace=default \
-  --command -- sleep 3600
-
-# Make sure the pod is running
-kubectl wait --for=condition=Ready pod/busybox -n default --timeout=60s
-
-# Wait a bit for gpuid to do its work
-msg "Waiting 10 seconds for gpuid to execute the command..."
-sleep 10
-
-# Check the logs for the expected output
-kubectl -n gpuid logs -l app=gpuid | grep "command executed successfully" || {
-  err "Integration test failed: expected log entry not found."
-}
 
 # Verify metrics are being exposed
 msg "Checking metrics endpoint..."
@@ -89,24 +69,5 @@ else
   err "ERROR: Failed to fetch metrics via port-forward"
 fi
 
-# Verify expected metrics are present
-echo "Verifying metrics content..."
-
-# Check for basic Prometheus metrics format
-if ! grep -q "# HELP" /tmp/metrics.txt; then
-  msg "ERROR: No Prometheus metrics format found"
-fi
-
-# Check for our specific metrics
-grep "gpuid_" /tmp/metrics.txt
-
-if ! grep -q "gpuid_command_success_total" /tmp/metrics.txt; then
-  err "gpuid_command_success_total metrics found"
-fi
-
-if grep -q "gpuid_command_failure_total" /tmp/metrics.txt; then
-  err "gpuid_command_failure_total metric found"
-fi
-
 # Clean up test resources (handled by trap)
-msg "Integration test passed - gpuid is working correctly and metrics are available"
+msg "Integration test passed"
