@@ -253,25 +253,39 @@ CREATE INDEX idx_serials_created_at ON serials (created_at);
 
 Few queries: 
 
-Nodes by cluster: 
+GPUs which have been used in more than 1 machine:
 
 ```sql
-SELECT cluster, COUNT(DISTINCT node) AS nodes_per_cluster
-FROM serials GROUP BY cluster ORDER BY cluster;
+SELECT 
+    gpu, 
+    COUNT(DISTINCT machine) AS machines_per_gpu
+FROM serials
+GROUP BY gpu
+HAVING COUNT(DISTINCT machine) > 1
+ORDER BY gpu;
 ```
 
-GPUs by machine: 
+GPUs that moved across clusters:
 
 ```sql
-SELECT gpu, COUNT(DISTINCT machine) AS gpus_in_machines
-FROM serials GROUP BY gpu ORDER BY gpu;
+SELECT 
+    gpu,
+    COUNT(DISTINCT cluster) AS clusters_seen_in
+FROM serials
+GROUP BY gpu
+HAVING COUNT(DISTINCT cluster) > 1
+ORDER BY clusters_seen_in DESC;
 ```
 
-GPUs by k8s node: 
+Number of GPUs per day: 
 
 ```sql
-SELECT node, COUNT(DISTINCT gpu) AS gpus_per_machine
-FROM serials GROUP BY machine ORDER BY machine;
+SELECT 
+    DATE(read_time) AS day,
+    COUNT(DISTINCT gpu) AS unique_gpus
+FROM serials
+GROUP BY day
+ORDER BY day;
 ```
 
 ### S3 Object Structure

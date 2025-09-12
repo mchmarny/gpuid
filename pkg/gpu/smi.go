@@ -5,6 +5,7 @@ import (
 	"fmt"
 )
 
+// parseSMIDevice parses the XML output from nvidia-smi into an NVSMIDevice struct
 func parseSMIDevice(data []byte) (*NVSMIDevice, error) {
 	var d NVSMIDevice
 	err := xml.Unmarshal(data, &d)
@@ -14,6 +15,7 @@ func parseSMIDevice(data []byte) (*NVSMIDevice, error) {
 	return &d, nil
 }
 
+// NVSMIDevice represents the structure of the XML output from nvidia-smi
 type NVSMIDevice struct {
 	Timestamp     string `xml:"timestamp" json:"timestamp" yaml:"timestamp"`
 	DriverVersion string `xml:"driver_version" json:"driverVersion" yaml:"driverVersion"`
@@ -22,6 +24,7 @@ type NVSMIDevice struct {
 	GPUs          []GPU  `xml:"gpu" json:"gpu" yaml:"gpu"`
 }
 
+// GPU represents an individual GPU and its attributes as reported by nvidia-smi
 type GPU struct {
 	ProductName               string                    `xml:"product_name" json:"productName" yaml:"productName"`
 	ProductBrand              string                    `xml:"product_brand" json:"productBrand" yaml:"productBrand"`
@@ -93,6 +96,7 @@ type GPU struct {
 	Capabilities              Capabilities              `xml:"capabilities" json:"capabilities" yaml:"capabilities"`
 }
 
+// Below are nested structs representing complex GPU attributes
 type MigMode struct {
 	CurrentMig string `xml:"current_mig" json:"currentMig" yaml:"currentMig"`
 	PendingMig string `xml:"pending_mig" json:"pendingMig" yaml:"pendingMig"`

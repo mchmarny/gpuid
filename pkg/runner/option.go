@@ -235,7 +235,6 @@ func WithServerPort(port int) Option {
 // The defaults are chosen based on common Kubernetes controller patterns
 // and have been battle-tested in high-throughput environments.
 func NewCommand(opts ...Option) *Command {
-	// Create command with default values directly (no recursive call)
 	cmd := &Command{
 		ExporterType:     DefaultExporterType,
 		Cluster:          DefaultClusterName,
@@ -279,9 +278,6 @@ func ListEnvVars() []string {
 }
 
 // NewCommandFromEnvVars creates a Command by reading configuration from environment variables.
-// This function is useful for containerized deployments where configuration is often
-// provided via environment variables. It falls back to production-ready defaults
-// for any settings not specified in the environment.
 func NewCommandFromEnvVars() *Command {
 	return NewCommand(
 		WithExporterType(getEnv(EnvVarExporterType, DefaultExporterType)),

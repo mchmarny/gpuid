@@ -21,8 +21,7 @@ type Info struct {
 
 // GetNodeProviderID retrieves and parses the provider ID of a given Kubernetes node.
 // It returns a Info struct containing the cloud provider, instance identifier, and raw provider ID.
-// Supports AWS, GCP, Azure, DigitalOcean, Hetzner, OpenStack, vSphere, and BareMetal.
-// Returns an error if the node cannot be fetched or if the provider ID format is unrecognized.
+// Supports AWS, GCP, Azure and BareMetal. Returns an error if node cannot be fetched or if provider is unrecognized.
 func GetNodeProviderID(ctx context.Context, log *slog.Logger, cs *kubernetes.Clientset, cfg *rest.Config, node string) (*Info, error) {
 	n, err := Get(ctx, log, cs, cfg, node)
 	if err != nil {
@@ -102,6 +101,8 @@ func parseNodeInfo(log *slog.Logger, providerID string) (*Info, error) {
 	return info, nil
 }
 
+// Get fetches the Kubernetes node object by name using the provided clientset and config.
+// It returns an error if the node name is empty, clientset or config is nil, or if the node cannot be fetched.
 func Get(ctx context.Context, log *slog.Logger, cs *kubernetes.Clientset, cfg *rest.Config, node string) (*corev1.Node, error) {
 	if strings.TrimSpace(node) == "" {
 		return nil, fmt.Errorf("node name is required")

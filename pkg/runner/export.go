@@ -23,7 +23,6 @@ const (
 
 // ExporterConfig holds configuration for initializing exporters.
 // Individual exporters load their specific configuration from environment variables,
-// following 12-factor app methodology for containerized deployments.
 type ExporterConfig struct {
 	Type       string        `json:"type" yaml:"type"`
 	BatchSize  int           `json:"batch_size,omitempty" yaml:"batch_size,omitempty"`
@@ -60,13 +59,13 @@ func GetExporter(ctx context.Context, log *slog.Logger, config ExporterConfig) (
 
 	// Apply defaults for optional configuration
 	if config.BatchSize <= 0 {
-		config.BatchSize = defaultBatchSize // Default batch size
+		config.BatchSize = defaultBatchSize
 	}
 	if config.RetryCount <= 0 {
-		config.RetryCount = defaultRetryCount // Default retry count
+		config.RetryCount = defaultRetryCount
 	}
 	if config.Timeout <= 0 {
-		config.Timeout = defaultTimeout // Default timeout
+		config.Timeout = defaultTimeout
 	}
 
 	log.Debug("initializing exporter",
@@ -77,7 +76,7 @@ func GetExporter(ctx context.Context, log *slog.Logger, config ExporterConfig) (
 
 	e := &Exporter{
 		Type:   config.Type,
-		Config: config, // Store the config with applied defaults
+		Config: config,
 	}
 
 	var err error
@@ -139,8 +138,7 @@ func (e *Exporter) Export(ctx context.Context, log *slog.Logger, cluster string,
 	}
 
 	if len(serials) == 0 {
-		log.Info("no serial numbers found, skipping export", "ns", pod.Namespace, "pod", pod.Name)
-		return nil
+		return fmt.Errorf("no serial numbers provided for export")
 	}
 
 	if strings.TrimSpace(node) == "" {
@@ -161,7 +159,7 @@ func (e *Exporter) Export(ctx context.Context, log *slog.Logger, cluster string,
 		"exporter_type", e.Type)
 
 	// Transform serials into structured readings with proper provenance
-	records := make([]*gpu.SerialNumberReading, 0, len(serials))
+	records := make([]*gpu.SerialNumberReading, 0)
 
 	for _, sn := range serials {
 		if strings.TrimSpace(sn) == "" {

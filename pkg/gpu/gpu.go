@@ -54,10 +54,7 @@ func GetSerialNumbers(ctx context.Context, log *slog.Logger, cs *kubernetes.Clie
 
 // execShell executes a shell command in a pod container using the Kubernetes exec API.
 // This function handles the complex SPDY streaming protocol and provides proper error classification.
-// The implementation follows Kubernetes client-go patterns for robust remote execution.
 func execShell(ctx context.Context, cfg *rest.Config, cs *kubernetes.Clientset, pod *corev1.Pod, container string) (string, error) {
-	// Build the exec request using the Kubernetes REST API
-	// This creates an SPDY stream to the kubelet running on the pod's node
 	req := cs.CoreV1().RESTClient().
 		Post().
 		Namespace(pod.Namespace).

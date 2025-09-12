@@ -25,15 +25,12 @@ import (
 
 const (
 	// serviceName is used in logging and metrics to identify this service
-	// TODO: migrate to k8s annotations/labels for processing state or use controller-runtime
 	serviceName = "gpuid"
 )
 
 // Run starts the pod execution controller with proper lifecycle management.
-// This is the main entry point that orchestrates all controller components
-// following Kubernetes controller-runtime patterns for robustness.
 func Run() {
-	// Set up signal handling for graceful shutdown - essential for cloud-native apps
+	// Signal handling for graceful shutdown
 	ctx, cancel := signal.NotifyContext(
 		context.Background(),
 		syscall.SIGINT,  // Ctrl+C
@@ -52,15 +49,13 @@ func Run() {
 		Level:     cmd.LogLevel,
 		AddSource: true,
 	})
-
-	// Log command configuration for transparency
 	logger.Info("configuration", "input", fmt.Sprintf("%+v", cmd))
 
 	if err := cmd.Validate(); err != nil {
 		die("invalid command configuration: %v", logger, err)
 	}
 
-	// Initialize command (e.g., exporter setup) with proper error handling
+	// Initialize command (e.g., exporter setup)
 	if err := cmd.Init(ctx, logger); err != nil {
 		die("failed to initialize command: %v", logger, err)
 	}
@@ -127,8 +122,7 @@ func runController(ctx context.Context, logger *slog.Logger, cs *kubernetes.Clie
 	)
 
 	// Create rate-limiting queue to handle pod events
-	// This prevents overwhelming the system during mass pod events
-	// Using NewTypedRateLimitingQueue instead of deprecated NewRateLimitingQueue
+	// This prevents overwhelming the system during initial loads or concurrent node restarts
 	q := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]())
 	defer q.ShutDown()
 
@@ -160,7 +154,6 @@ func runController(ctx context.Context, logger *slog.Logger, cs *kubernetes.Clie
 	_, err = informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: enqueueIfReady,
 		UpdateFunc: func(_, newObj any) {
-			// Only process update events, not every reconciliation
 			enqueueIfReady(newObj)
 		},
 	})

@@ -24,8 +24,6 @@ var (
 )
 
 // do processes items from the work queue in a loop until the context is canceled.
-// This follows the standard Kubernetes controller worker pattern with proper error handling
-// and resource cleanup. Each worker operates independently to provide horizontal scalability.
 func do(
 	ctx context.Context,
 	log *slog.Logger,
@@ -49,7 +47,7 @@ func do(
 
 		// Process the item in a closure to ensure proper cleanup
 		func(key string) {
-			// Always mark the item as done when we finish processing
+			// Mark the item as done when we finish processing
 			defer q.Done(key)
 
 			// Parse namespace and name from the cache key
@@ -105,23 +103,19 @@ func processPod(
 	pod *corev1.Pod,
 	cmd *Command,
 ) error {
-	// Defensive readiness check at processing time
-	// Pods can transition states between enqueueing and processing
+	// In case pod transitioned states between enqueueing and processing
 	if !podReady(pod) {
 		log.Debug("pod not ready at processing time", "pod", pod.Name, "phase", pod.Status.Phase)
-		return nil // Not an error, just skip
+		return nil
 	}
 
-	// Ensure we only process each pod UID once to prevent duplicate executions
-	// This is crucial for idempotency in distributed systems
+	// Ensure we only process each pod UID once to prevent duplicate exports
 	if processed.Has(string(pod.UID)) {
 		log.Debug("pod already processed", "pod", pod.Name, "uid", pod.UID)
 		return nil
 	}
 
 	// Add jitter to prevent thundering herd problems when many pods become ready simultaneously
-	// This is especially important in large clusters with many replicas
-	// Using math/rand for jitter is appropriate here as we don't need cryptographic randomness
 	jitterMs := rand.Intn(200) //nolint:gosec // G404: Non-crypto use case for jitter timing
 	select {
 	case <-time.After(time.Duration(jitterMs) * time.Millisecond):
@@ -133,7 +127,7 @@ func processPod(
 	pctx, cancel := context.WithTimeout(ctx, cmd.Timeout)
 	defer cancel()
 
-	// Mark this pod as processed regardless of success/failure to prevent retries
+	// Mark this pod as processed regardless of success/failure to prevent endless retries
 	processed.Add(string(pod.UID))
 
 	log.Info("processing pod",
@@ -146,13 +140,19 @@ func processPod(
 	serials, err := gpu.GetSerialNumbers(pctx, log, cs, cfg, pod, cmd.Container)
 	if err != nil {
 		counterErr.Increment(pod.Spec.NodeName, pod.Name)
-		log.Warn("failed to get GPU serial numbers",
+		log.Error("failed to get GPU serial numbers",
 			"pod", pod.Name,
 			"uid", pod.UID,
 			"node", pod.Spec.NodeName,
 			"err", err,
 		)
-		return fmt.Errorf("failed to get GPU serial numbers: %w", err)
+		return fmt.Errorf("error obtaining GPU serial numbers: %w", err)
+	}
+
+	// Skip pods without serial numbers
+	if len(serials) == 0 {
+		log.Debug("no GPU serial numbers found, skipping export", "pod", pod.Name, "uid", pod.UID, "node", pod.Spec.NodeName)
+		return nil
 	}
 
 	// Retrieve node provider ID for export metadata
@@ -208,7 +208,6 @@ func processPod(
 
 // podReady checks if a pod is ready to execute commands.
 // A pod is considered ready when it's in Running phase and all containers are ready.
-// This is more strict than just checking the phase, which prevents racing with container startup.
 func podReady(p *corev1.Pod) bool {
 	// Pod must be in Running phase
 	if p.Status.Phase != corev1.PodRunning {
