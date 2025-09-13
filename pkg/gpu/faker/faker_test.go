@@ -8,7 +8,6 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	// Create a temporary XML file for testing
 	tmpDir := t.TempDir()
 	xmlFile := filepath.Join(tmpDir, "test_smi.xml")
 	xmlContent := `<?xml version="1.0"?>
@@ -28,37 +27,28 @@ func TestNew(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		config  Config
+		file    string
 		wantErr bool
 	}{
 		{
-			name: "valid config with XML file",
-			config: Config{
-				XMLFilePath: xmlFile,
-				LogLevel:    "info",
-			},
+			name:    "valid config with XML file",
+			file:    xmlFile,
 			wantErr: false,
 		},
 		{
-			name: "config without XML file",
-			config: Config{
-				LogLevel: "debug",
-			},
+			name:    "config without XML file",
 			wantErr: true,
 		},
 		{
-			name: "config with non-existent XML file",
-			config: Config{
-				XMLFilePath: "/non/existent/file.xml",
-				LogLevel:    "info",
-			},
+			name:    "config with non-existent XML file",
+			file:    "/non/existent/file.xml",
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			faker, err := New(tt.config)
+			faker, err := New(tt.file)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("New() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -71,7 +61,6 @@ func TestNew(t *testing.T) {
 }
 
 func TestHandleNvidiaSMI(t *testing.T) {
-	// Create faker with test XML content
 	tmpDir := t.TempDir()
 	xmlFile := filepath.Join(tmpDir, "test_smi.xml")
 	xmlContent := `<?xml version="1.0"?><nvidia_smi_log><attached_gpus>1</attached_gpus></nvidia_smi_log>`
@@ -80,10 +69,7 @@ func TestHandleNvidiaSMI(t *testing.T) {
 		t.Fatalf("Failed to create test XML file: %v", err)
 	}
 
-	faker, err := New(Config{
-		XMLFilePath: xmlFile,
-		LogLevel:    "info",
-	})
+	faker, err := New(xmlFile)
 	if err != nil {
 		t.Fatalf("Failed to create faker: %v", err)
 	}
@@ -132,34 +118,6 @@ func TestHandleNvidiaSMI(t *testing.T) {
 	}
 }
 
-func TestParseLogLevel(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string // We'll check the string representation
-	}{
-		{"debug", "DEBUG"},
-		{"DEBUG", "DEBUG"},
-		{"info", "INFO"},
-		{"INFO", "INFO"},
-		{"warn", "WARN"},
-		{"warning", "WARN"},
-		{"error", "ERROR"},
-		{"ERROR", "ERROR"},
-		{"invalid", "INFO"},    // defaults to INFO
-		{"", "INFO"},           // defaults to INFO
-		{"  debug  ", "DEBUG"}, // trimmed
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			level := parseLogLevel(tt.input)
-			if level.String() != tt.expected {
-				t.Errorf("parseLogLevel(%q) = %v, want %v", tt.input, level.String(), tt.expected)
-			}
-		})
-	}
-}
-
 func TestExecuteCommand(t *testing.T) {
 	tmpDir := t.TempDir()
 	xmlFile := filepath.Join(tmpDir, "test.xml")
@@ -169,9 +127,7 @@ func TestExecuteCommand(t *testing.T) {
 		t.Fatalf("Failed to create XML file: %v", err)
 	}
 
-	faker, err := New(Config{
-		XMLFilePath: xmlFile,
-	})
+	faker, err := New(xmlFile)
 	if err != nil {
 		t.Fatalf("Failed to create faker: %v", err)
 	}
@@ -204,7 +160,6 @@ func TestExecuteCommand(t *testing.T) {
 				return
 			}
 
-			// stderr should be empty for successful commands
 			if !tt.wantErr && stderr != "" {
 				t.Errorf("Unexpected stderr output: %s", stderr)
 			}
@@ -213,9 +168,6 @@ func TestExecuteCommand(t *testing.T) {
 }
 
 func TestFakerServerMode(t *testing.T) {
-	// This test checks that the faker can be created and configured for server mode
-	// We don't actually run ServeForever as it blocks indefinitely
-
 	tmpDir := t.TempDir()
 	xmlFile := filepath.Join(tmpDir, "server_test.xml")
 	xmlContent := `<?xml version="1.0"?><nvidia_smi_log><attached_gpus>1</attached_gpus></nvidia_smi_log>`
@@ -224,12 +176,7 @@ func TestFakerServerMode(t *testing.T) {
 		t.Fatalf("Failed to create XML file: %v", err)
 	}
 
-	config := Config{
-		XMLFilePath: xmlFile,
-		LogLevel:    "debug",
-	}
-
-	faker, err := New(config)
+	faker, err := New(xmlFile)
 	if err != nil {
 		t.Errorf("Failed to create faker for server mode: %v", err)
 	}
@@ -238,8 +185,7 @@ func TestFakerServerMode(t *testing.T) {
 		t.Error("Faker should have loaded XML content")
 	}
 
-	// Test that configuration is correct
-	if faker.config.XMLFilePath != xmlFile {
-		t.Errorf("XML file path not set correctly: got %s, want %s", faker.config.XMLFilePath, xmlFile)
+	if faker.xmlFile != xmlFile {
+		t.Errorf("XML file path not set correctly: got %s, want %s", faker.xmlFile, xmlFile)
 	}
 }

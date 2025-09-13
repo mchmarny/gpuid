@@ -4,34 +4,27 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
-)
 
-// Config holds configuration for the GPU faker
-type Config struct {
-	// XMLFilePath is the path to the XML file to serve as nvidia-smi output
-	XMLFilePath string
-	// LogLevel is the logging level (debug, info, warn, error)
-	LogLevel string
-}
+	"github.com/mchmarny/gpuid/pkg/logger"
+)
 
 // GPUFaker simulates nvidia-smi command behavior
 type GPUFaker struct {
-	config     Config
 	logger     *slog.Logger
+	xmlFile    string
 	xmlContent string
 }
 
 // New creates a new GPU faker instance
-func New(config Config) (*GPUFaker, error) {
-	level := parseLogLevel(config.LogLevel)
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: level,
-	}))
+func New(file string) (*GPUFaker, error) {
+	logger := logger.NewProductionLogger(logger.Config{
+		Service: "gpufaker",
+		Level:   "info",
+	})
 
 	faker := &GPUFaker{
-		config: config,
-		logger: logger,
+		xmlFile: file,
+		logger:  logger,
 	}
 
 	if err := faker.loadXMLContent(); err != nil {
@@ -43,24 +36,24 @@ func New(config Config) (*GPUFaker, error) {
 
 // loadXMLContent reads the XML file content
 func (f *GPUFaker) loadXMLContent() error {
-	if f.config.XMLFilePath == "" {
+	if f.xmlFile == "" {
 		return fmt.Errorf("XML file path is not configured")
 	}
 
 	// Check if file exists
-	if _, err := os.Stat(f.config.XMLFilePath); os.IsNotExist(err) {
-		return fmt.Errorf("XML file does not exist: %s", f.config.XMLFilePath)
+	if _, err := os.Stat(f.xmlFile); os.IsNotExist(err) {
+		return fmt.Errorf("XML file does not exist: %s", f.xmlFile)
 	}
 
 	// Read file content
-	content, err := os.ReadFile(f.config.XMLFilePath)
+	content, err := os.ReadFile(f.xmlFile)
 	if err != nil {
 		return fmt.Errorf("failed to read XML file: %w", err)
 	}
 
 	f.xmlContent = string(content)
 	f.logger.Info("loaded XML content",
-		"file", f.config.XMLFilePath,
+		"file", f.xmlFile,
 		"size", len(f.xmlContent))
 
 	return nil
@@ -81,11 +74,6 @@ func (f *GPUFaker) HandleNvidiaSMI(args []string) (string, error) {
 func (f *GPUFaker) ServeForever() error {
 	f.logger.Info("starting GPU faker in server mode")
 
-	// Log configuration
-	f.logger.Info("GPU faker configuration",
-		"xml_file", f.config.XMLFilePath,
-		"log_level", f.config.LogLevel)
-
 	// Keep the process running
 	f.logger.Info("GPU faker is ready and waiting...")
 
@@ -104,22 +92,6 @@ func (f *GPUFaker) ExecuteCommand(command string, args []string) (string, string
 		return "", err.Error(), err
 	}
 	return output, "", nil
-}
-
-// parseLogLevel converts string log level to slog.Level
-func parseLogLevel(level string) slog.Level {
-	switch strings.ToLower(strings.TrimSpace(level)) {
-	case "debug":
-		return slog.LevelDebug
-	case "info", "":
-		return slog.LevelInfo
-	case "warn", "warning":
-		return slog.LevelWarn
-	case "error":
-		return slog.LevelError
-	default:
-		return slog.LevelInfo
-	}
 }
 
 // GetXMLContent returns the loaded XML content

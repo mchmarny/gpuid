@@ -2,7 +2,6 @@ package stdout
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -21,23 +20,24 @@ type Exporter struct{}
 
 // Write outputs GPU serial number readings to stdout as JSON.
 // Each record is written as a separate JSON line (NDJSON format) for better log parsing.
-func (e *Exporter) Write(_ context.Context, log *slog.Logger, records []*gpu.SerialNumberReading) error {
+func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.SerialNumberReading) error {
 	if records == nil {
 		return fmt.Errorf("records is nil")
 	}
-
-	// Use a JSON encoder for consistent formatting
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ") // Pretty print for readability
 
 	for _, reading := range records {
 		if reading == nil {
 			continue // Skip nil records gracefully
 		}
 
-		if err := encoder.Encode(reading); err != nil {
-			return fmt.Errorf("failed to encode reading: %w", err)
-		}
+		log.InfoContext(ctx, "gpu serial number reading",
+			"cluster", reading.Cluster,
+			"node", reading.Node,
+			"machine", reading.Machine,
+			"source", reading.Source,
+			"gpu", reading.GPU,
+			"time", reading.Time,
+		)
 	}
 
 	log.Info("export completed", "records", len(records))
