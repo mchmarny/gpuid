@@ -1,4 +1,3 @@
-![License](https://img.shields.io/github/license/mchmarny/gpuid)
 ![Last commit](https://img.shields.io/github/last-commit/mchmarny/gpuid)
 ![Issues](https://img.shields.io/github/issues/mchmarny/gpuid)
 ![PRs](https://img.shields.io/github/issues-pr/mchmarny/gpuid)

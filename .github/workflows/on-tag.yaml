@@ -1,4 +1,4 @@
-name: on_tag
+name: release
 on:
   push:
     tags:

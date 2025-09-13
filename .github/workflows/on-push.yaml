@@ -1,4 +1,4 @@
-name: on_push
+name: main
 
 on:
   push:
