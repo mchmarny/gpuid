@@ -72,9 +72,6 @@ func TestSetDefault(t *testing.T) {
 	if slog.Default() == originalLogger {
 		t.Error("SetDefault() did not change the default logger")
 	}
-
-	// Test that we can log with the new default
-	slog.Info("test message")
 }
 
 func TestNewTestLogger(t *testing.T) {

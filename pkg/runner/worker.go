@@ -130,7 +130,7 @@ func processPod(
 	// Mark this pod as processed regardless of success/failure to prevent endless retries
 	processed.Add(string(pod.UID))
 
-	log.Info("processing pod",
+	log.Debug("processing pod",
 		"pod", pod.Name,
 		"uid", pod.UID,
 		"node", pod.Spec.NodeName,

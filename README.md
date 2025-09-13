@@ -315,7 +315,7 @@ The `gpuid` container images are built with SLSA (Supply-chain Levels for Softwa
 > Update the image digest to the version you end up using.
 
 ```shell
-export IMAGE=ghcr.io/mchmarny/gpuid@sha256:0363f051d799ec629e0cf59c3c0d14a1e5a8bfb283f38b99e2e311e763547f8e
+export IMAGE=ghcr.io/mchmarny/gpuid@sha256:9080d88115528838c81feaf9955dba5ef74067c628a0d065780eb5bc160361e3
 
 cosign verify-attestation \
     --output json \

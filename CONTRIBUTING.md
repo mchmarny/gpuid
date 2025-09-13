@@ -347,11 +347,11 @@ go build -o gpuid ./cmd/gpuid
 ### Logging Standards
 ```go
 // Good: Structured logging with context
-log.Info("exported GPU serials",
-    "cluster", cluster,
-    "node", node,
-    "count", len(serials),
-    "duration", duration)
+log.Info("export completed",
+    "endpoint", e.Endpoint,
+    "records", len(records),
+    "size_bytes", len(data),
+    "status", resp.StatusCode)
 
 // Avoid: Unstructured logging
 log.Printf("Exported %d serials from %s", len(serials), node)
