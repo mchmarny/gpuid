@@ -1,5 +1,8 @@
 [![pipeline status](https://github.com/mchmarny/gpuid/badges/main/pipeline.svg)](https://github.com/mchmarny/gpuid/-/commits/main) [![coverage report](https://github.com/mchmarny/gpuid/badges/main/coverage.svg)](https://github.com/mchmarny/gpuid/-/commits/main)
 
+[![last commit](https://github.com/mchmarny/gpuid/actions/workflows/on-push.yaml/badge.svg)](https://github.com/mchmarny/gpuid/actions/workflows/on-push.yaml) [![release](https://github.com/mchmarny/gpuid/actions/workflows/on-tag.yaml/badge.svg)](https://github.com/mchmarny/gpuid/actions/workflows/on-tag.yaml)
+
+
 # GPU Serial Number Exporter (gpuid)
 
 A Kubernetes-native service that monitors GPU-enabled pods and exports GPU serial numbers to various backends for tracking, monitoring, and analytics. The service watches for pods with NVIDIA device plugin daemonsets, executes `nvidia-smi` to extract GPU serial numbers, and exports structured data to configurable destinations.
