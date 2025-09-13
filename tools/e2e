@@ -34,14 +34,12 @@ fi
 
 # Create config map for faker XML data
 kubectl create cm smi-faker-data -n gpu-operator \
-  --from-file=nvidia-smi.xml=pkg/faker/h100.xml --dry-run=client -o yaml | \
+  --from-file=nvidia-smi.xml=pkg/gpu/examples/h100.xml --dry-run=client -o yaml | \
   kubectl apply -f -
-
-# TODO: GPU operator validation
 
 # Deploy fake nvidia-smi on all nodes with nodeGroup=gpu-worker label
 msg "Deploying fake nvidia-smi on gpu-worker nodes..."
-kubectl apply -f deployment/faker
+kubectl apply -f deployment/tests/faker
 
 # Apply dev deployment
 kubectl apply -k deployment/overlays/stdout

@@ -19,7 +19,7 @@ spec:
       containers:
         - name: smi-faker
           image: ghcr.io/mchmarny/smifaker:latest
-          args: ["-f=/data/nvidia-smi.xml", "--log-level=info"]
+          args: ["-f=/data/nvidia-smi.xml"]
           resources:
             requests:
               cpu: "500m"
