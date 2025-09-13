@@ -1,6 +1,18 @@
-[![pipeline status](https://github.com/mchmarny/gpuid/badges/main/pipeline.svg)](https://github.com/mchmarny/gpuid/-/commits/main) [![coverage report](https://github.com/mchmarny/gpuid/badges/main/coverage.svg)](https://github.com/mchmarny/gpuid/-/commits/main)
-
-[![last commit](https://github.com/mchmarny/gpuid/actions/workflows/on-push.yaml/badge.svg)](https://github.com/mchmarny/gpuid/actions/workflows/on-push.yaml) [![release](https://github.com/mchmarny/gpuid/actions/workflows/on-tag.yaml/badge.svg)](https://github.com/mchmarny/gpuid/actions/workflows/on-tag.yaml)
+![License](https://img.shields.io/github/license/mchmarny/gpuid)
+![Release](https://img.shields.io/github/v/release/mchmarny/gpuid?sort=semver)
+![Last commit](https://img.shields.io/github/last-commit/mchmarny/gpuid)
+![Issues](https://img.shields.io/github/issues/mchmarny/gpuid)
+![PRs](https://img.shields.io/github/issues-pr/mchmarny/gpuid)
+![Stars](https://img.shields.io/github/stars/mchmarny/gpuid?style=social)
+![CI](https://github.com/mchmarny/gpuid/actions/workflows/ci.yml/badge.svg)
+![Go Report Card](https://goreportcard.com/badge/github.com/mchmarny/gpuid)
+[![OnTag](https://github.com/mchmarny/gpuid/actions/workflows/on-tag.yaml/badge.svg)](https://github.com/mchmarny/gpuid/actions/workflows/on-tag.yaml)
+[![codecov](https://codecov.io/gh/mchmarny/gpuid/branch/main/graph/badge.svg)](https://codecov.io/gh/mchmarny/gpuid)
+[![Coverage Status](https://coveralls.io/repos/github/mchmarny/gpuid/badge.svg?branch=main)](https://coveralls.io/github/mchmarny/gpuid?branch=main)
+[![Go Reference](https://pkg.go.dev/badge/github.com/mchmarny/gpuid.svg)](https://pkg.go.dev/github.com/mchmarny/gpuid)
+![Go Version](https://img.shields.io/github/go-mod/go-version/mchmarny/gpuid)
+![Docker Pulls](https://img.shields.io/docker/pulls/mchmarny/gpuid)
+![Image Size](https://img.shields.io/docker/image-size/mchmarny/gpuid/latest)
 
 
 # GPU Serial Number Exporter (gpuid)
