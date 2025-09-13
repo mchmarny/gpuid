@@ -6,14 +6,10 @@
 ![OnPush](https://github.com/mchmarny/gpuid/actions/workflows/on-push.yaml/badge.svg)
 ![OnTag](https://github.com/mchmarny/gpuid/actions/workflows/on-tag.yaml/badge.svg)
 ![Go Report Card](https://goreportcard.com/badge/github.com/mchmarny/gpuid)
-[![OnTag](https://github.com/mchmarny/gpuid/actions/workflows/on-tag.yaml/badge.svg)](https://github.com/mchmarny/gpuid/actions/workflows/on-tag.yaml)
 [![codecov](https://codecov.io/gh/mchmarny/gpuid/branch/main/graph/badge.svg)](https://codecov.io/gh/mchmarny/gpuid)
-[![Coverage Status](https://coveralls.io/repos/github/mchmarny/gpuid/badge.svg?branch=main)](https://coveralls.io/github/mchmarny/gpuid?branch=main)
 [![Go Reference](https://pkg.go.dev/badge/github.com/mchmarny/gpuid.svg)](https://pkg.go.dev/github.com/mchmarny/gpuid)
 ![Go Version](https://img.shields.io/github/go-mod/go-version/mchmarny/gpuid)
-![Docker Pulls](https://img.shields.io/docker/pulls/mchmarny/gpuid)
-![Image Size](https://img.shields.io/docker/image-size/mchmarny/gpuid/latest)
-
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/mchmarny/gpuid/total)
 
 # GPU Serial Number Exporter (gpuid)
 
