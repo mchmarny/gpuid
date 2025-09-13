@@ -37,7 +37,6 @@ kubectl create cm smi-faker-data -n gpu-operator \
   kubectl apply -f -
 
 # Deploy fake nvidia-smi on all nodes with nodeGroup=gpu-worker label
-msg "Deploying fake nvidia-smi on gpu-worker nodes..."
 kubectl apply -f deployments/smi-faker
 
 # Apply dev deployment
@@ -56,11 +55,15 @@ IMAGE=$(kubectl get pods \
   -o jsonpath="{.items[0].status.containerStatuses[0].imageID}")
 msg "Using image: $IMAGE"
 
+# Count successful exports (length == number of nodes with GPUs)
+SUCCESS_COUNT=$(kubectl -n gpuid logs -l app=gpuid --tail=-1 \
+  | jq -s '[.[] | select(.msg == "export completed")] | length')
+if [[ "$SUCCESS_COUNT" -lt 2 ]]; then
+  err "Expected at least 2 successful export, found $SUCCESS_COUNT"
+fi
+
 # Verify metrics are being exposed
 msg "Checking metrics endpoint..."
-
-# Use kubectl port-forward to access metrics
-msg "Using port-forward to access metrics..."
 kubectl port-forward -n gpuid service/gpuid 8080:8080 >/dev/null 2>&1 &
 PF_PID=$!
 
