@@ -145,6 +145,10 @@ release: ## Runs the release process
 # Integration testing with KinD
 # =======================================================================================
 
+.PHONY: faker
+faker: ## Create NV SMI faker container image
+	tools/faker
+
 .PHONY: up
 up: ## Create a Kubernetes cluster with KinD
 	kind create cluster --name $(APP_NAME) --config $(CONFIG_FILE) --wait 5m

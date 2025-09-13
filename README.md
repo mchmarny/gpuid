@@ -150,17 +150,17 @@ env:
 
 1. **Configure the deployment** by updating the specific overlay that corresponds to your backend type:
 
-* http - [deployment/overlays/http/patch-deployment.yaml](deployment/overlays/http/patch-deployment.yaml)   
-* postgres - [deployment/overlays/postgres/patch-deployment.yaml](deployment/overlays/postgres/patch-deployment.yaml)
-* s3 - [deployment/overlays/s3/patch-deployment.yaml](deployment/overlays/s3/patch-deployment.yaml)
-* stdout - [deployment/overlays/stdout/patch-deployment.yaml](deployment/overlays/stdout/patch-deployment.yaml)
+* http - [deployments/gpuid/overlays/http/patch-deployment.yaml](deployments/gpuid/overlays/http/patch-deployment.yaml)   
+* postgres - [deployments/gpuid/overlays/postgres/patch-deployment.yaml](deployments/gpuid/overlays/postgres/patch-deployment.yaml)
+* s3 - [deployments/gpuid/overlays/s3/patch-deployment.yaml](deployments/gpuid/overlays/s3/patch-deployment.yaml)
+* stdout - [deployments/gpuid/overlays/stdout/patch-deployment.yaml](deployments/gpuid/overlays/stdout/patch-deployment.yaml)
 
 1. **Apply the configuration**
 
 For example, to deploy with S3 backend:
 
 ```shell
-kubectl apply -k deployment/overlays/s3
+kubectl apply -k deployments/gpuid/overlays/s3
 ```
 
 1. **Verify deployment**
@@ -191,7 +191,7 @@ kubectl -n gpuid logs -l app=gpuid --tail=-1 \
 ### Cleanup
 
 ```shell
-kubectl delete -k deployment/overlays/s3
+kubectl delete -k deployments/gpuid/overlays/s3
 ```
 
 ## Metrics and Monitoring

@@ -1,25 +1,29 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: smi-faker
+  name: nvidia-device-plugin-daemonset
   namespace: gpu-operator
   labels:
-    app: smi-faker
+    app: nvidia-device-plugin-daemonset
 spec:
   selector:
     matchLabels:
-      app: smi-faker
+      app: nvidia-device-plugin-daemonset
   template:
     metadata:
       labels:
-        app: smi-faker
+        app: nvidia-device-plugin-daemonset
     spec:
       nodeSelector:
         nodeGroup: gpu-worker
       containers:
-        - name: smi-faker
+        - name: nvidia-device-plugin
           image: ghcr.io/mchmarny/smifaker:latest
-          args: ["-f=/data/nvidia-smi.xml"]
+          command: ["/bin/bash"]
+          args: ["-c", "while true; do sleep 30; done"]
+          env:
+            - name: SMIFAKER_CONTENT_PATH
+              value: "/data/nvidia-smi.xml"
           resources:
             requests:
               cpu: "500m"

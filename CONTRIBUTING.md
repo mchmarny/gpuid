@@ -152,28 +152,6 @@ gofumpt -w .
 
 ## Project Architecture
 
-### Core Components
-
-```
-├── cmd/gpuid/              # Application entry point
-├── pkg/
-│   ├── counter/            # Prometheus metrics collection
-│   ├── exporters/          # Export backend implementations
-│   │   ├── stdout/         # Console/development exporter  
-│   │   ├── postgres/       # PostgreSQL database exporter
-│   │   └── s3/             # Amazon S3 cloud exporter
-│   ├── gpu/               # GPU detection and nvidia-smi integration
-│   ├── logger/            # Structured logging (slog)
-│   ├── node/              # Kubernetes node metadata extraction
-│   ├── runner/            # Service orchestration and export factory
-│   └── server/            # HTTP server, health checks, metrics
-├── deployment/            # Kubernetes deployment manifests
-│   ├── base/             # Base Kustomize configuration
-│   ├── overlays/         # Environment-specific configurations
-│   └── policy/           # RBAC and security policies
-└── tools/                # Build scripts and utilities
-```
-
 ### Design Principles
 
 - **12-Factor App**: Configuration via environment variables
@@ -328,28 +306,6 @@ go build -o gpuid ./cmd/gpuid
 
 # Run locally (requires kubectl context)
 ./gpuid
-```
-
-## Project Structure
-
-```
-├── cmd/gpuid/           # Main application entry point
-├── pkg/
-│   ├── counter/         # Prometheus metrics implementation  
-│   ├── exporters/       # Export backend implementations
-│   │   ├── stdout/      # Console/stdout exporter
-│   │   ├── postgres/    # PostgreSQL database exporter
-│   │   └── s3/          # Amazon S3 exporter
-│   ├── gpu/            # GPU detection and nvidia-smi integration
-│   ├── logger/         # Structured logging configuration
-│   ├── node/           # Kubernetes node metadata
-│   ├── runner/         # Core service orchestration
-│   └── server/         # HTTP server and health checks
-├── deployment/         # Kubernetes manifests
-│   ├── base/          # Base Kustomize configuration  
-│   ├── overlays/      # Environment-specific overlays
-│   └── policy/        # Security policies and RBAC
-└── tools/             # Build and development scripts
 ```
 
 ## Adding New Exporters

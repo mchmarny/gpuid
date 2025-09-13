@@ -15,13 +15,13 @@ func TestParseNvidiaSMILogs(t *testing.T) {
 	}{
 		{
 			name:    "parse h100 log",
-			file:    "examples/h100.xml",
+			file:    "../../etc/gpus/h100.xml",
 			gpus:    8,
 			wantErr: false,
 		},
 		{
 			name:    "parse gb200 log",
-			file:    "examples/gb200.xml",
+			file:    "../../etc/gpus/gb200.xml",
 			gpus:    4,
 			wantErr: false,
 		},

@@ -4,6 +4,7 @@ set -euo pipefail
 
 # Globals
 PROJECT_NAME="gpuid"
+REGISTRY_URL="ghcr.io/mchmarny"
 
 # Define some variables
 COLOR_GREEN='\033[0;32m'

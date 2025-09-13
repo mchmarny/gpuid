@@ -9,6 +9,7 @@ spec:
     spec:
       containers:
         - name: gpuid
+          image: ghcr.io/mchmarny/gpuid:latest
           env:
             - name: EXPORTER_TYPE
               value: 'stdout'

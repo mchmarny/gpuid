@@ -45,6 +45,16 @@ func TestParseNodeInfo(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:       "valid Kind providerID",
+			providerID: "kind://docker/gpuid/gpuid-worker",
+			want: &Info{
+				Provider:   "kind",
+				Identifier: "gpuid-worker",
+				Raw:        "kind://docker/gpuid/gpuid-worker",
+			},
+			wantErr: false,
+		},
+		{
 			name:       "invalid providerID format",
 			providerID: "invalid-format",
 			want:       nil,

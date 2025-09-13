@@ -6,9 +6,8 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${DIR}/common"
 ROOT=$(dirname "${DIR}")
 
-# Check for required tools
-REQUIRED_TOOLS=(kubectl)
-has_tools "${REQUIRED_TOOLS[@]}"
+# Check if required tools are installed
+has_tools kubectl pkill
 
 # Cleanup function for graceful exit
 cleanup() {
@@ -34,18 +33,15 @@ fi
 
 # Create config map for faker XML data
 kubectl create cm smi-faker-data -n gpu-operator \
-  --from-file=nvidia-smi.xml=pkg/gpu/examples/h100.xml --dry-run=client -o yaml | \
+  --from-file=nvidia-smi.xml=etc/gpus/h100.xml --dry-run=client -o yaml | \
   kubectl apply -f -
 
 # Deploy fake nvidia-smi on all nodes with nodeGroup=gpu-worker label
 msg "Deploying fake nvidia-smi on gpu-worker nodes..."
-kubectl apply -f deployment/tests/faker
+kubectl apply -f deployments/smi-faker
 
 # Apply dev deployment
-kubectl apply -k deployment/overlays/stdout
-
-# Restart the deployment to pick up any changes
-kubectl rollout restart deployment/gpuid -n gpuid
+kubectl apply -k deployments/gpuid/overlays/stdout
 
 # Wait for the deployment to be available
 kubectl wait --for=condition=available --timeout=60s deployment/gpuid -n gpuid 

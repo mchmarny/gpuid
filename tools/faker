@@ -1,0 +1,31 @@
+#!/bin/bash
+set -eo pipefail
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${DIR}/common"
+ROOT=$(dirname "${DIR}")
+DIST="$ROOT/dist"
+
+has_tools go docker
+mkdir -p $DIST
+
+msg "Building nvidia-smi faker binary for multiple architectures..."
+GOOS=linux  GOARCH=amd64 CGO_ENABLED=0 go build -o "$DIST/nvidia-smi-linux-amd64" "$ROOT/cmd/smifaker/main.go"
+GOOS=linux  GOARCH=arm64 CGO_ENABLED=0 go build -o "$DIST/nvidia-smi-linux-arm64" "$ROOT/cmd/smifaker/main.go"
+GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o "$DIST/nvidia-smi-darwin-amd64" "$ROOT/cmd/smifaker/main.go"
+GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o "$DIST/nvidia-smi-darwin-arm64" "$ROOT/cmd/smifaker/main.go"
+
+
+msg "Building nvidia-smi faker Docker image for multiple architectures..."
+docker buildx rm multiarch-builder 2>/dev/null || true
+docker buildx create --use --name multiarch-builder --driver docker-container
+docker buildx inspect --bootstrap
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  --push \
+  -t "$REGISTRY_URL/smifaker:latest" \
+  -f "$ROOT/etc/smi-faker/Dockerfile" \
+  "$ROOT"
+docker buildx rm multiarch-builder
+
+msg "Multi-arch nvidia-smi faker image built/pushed"

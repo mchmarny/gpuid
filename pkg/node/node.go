@@ -62,41 +62,16 @@ func parseNodeInfo(log *slog.Logger, providerID string) (*Info, error) {
 
 	provider := strings.ToLower(parts[0])
 	details := strings.TrimPrefix(providerID, provider+"://")
-
 	log.Debug("parsed providerID", "provider", provider, "details", details)
 
-	switch provider {
-	case "aws":
-		// aws:///us-east-1-dfw-2a/i-09718a2c72afb281c
-		subParts := strings.Split(details, "/")
-		if len(subParts) != 3 {
-			return nil, fmt.Errorf("invalid AWS providerID format: %s, parts: %d", providerID, len(subParts))
-		}
-		info.Identifier = subParts[len(subParts)-1]
-	case "gce":
-		// gce://project-id/us-central1-a/instance-name
-		subParts := strings.Split(details, "/")
-		if len(subParts) != 3 {
-			return nil, fmt.Errorf("invalid GCP providerID format: %s, parts: %d", providerID, len(subParts))
-		}
-		info.Identifier = subParts[len(subParts)-1]
-	case "azure":
-		// azure:///subscriptions/subscription-id/resourceGroups/rg-name/providers/Microsoft.Compute/virtualMachines/vm-name
-		subParts := strings.Split(details, "/")
-		if len(subParts) < 9 {
-			return nil, fmt.Errorf("invalid Azure providerID format: %s, parts: %d", providerID, len(subParts))
-		}
-		info.Identifier = subParts[len(subParts)-1]
-	case "baremetal":
-		// baremetal:///node-name
-		subParts := strings.Split(details, "/")
-		if len(subParts) != 2 {
-			return nil, fmt.Errorf("invalid BareMetal providerID format: %s, parts: %d", providerID, len(subParts))
-		}
-		info.Identifier = subParts[len(subParts)-1]
-	default:
-		return nil, fmt.Errorf("unsupported provider: %s", provider)
+	subParts := strings.Split(details, "/")
+	log.Debug("parsed providerID details", "provider", provider, "details", details, "subParts", subParts)
+	if len(subParts) == 0 {
+		return nil, fmt.Errorf("invalid providerID details format: %s", details)
 	}
+
+	info.Identifier = subParts[len(subParts)-1]
+	log.Debug("extracted node info", "provider", info.Provider, "identifier", info.Identifier)
 
 	return info, nil
 }
