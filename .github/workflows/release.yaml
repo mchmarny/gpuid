@@ -37,7 +37,7 @@ jobs:
     steps:
 
     # build the image
-    - uses: mchmarny/common/go-build@4b278fa73ed5af7bf52ec0ed57427c2c1104b30a  # v0.1.0
+    - uses: mchmarny/common/go-build@4df2bd275f9a4569e7ceadc31b67b043118256ff  # v0.2.0
       id: build
       with:
         main-path: cmd/gpuid/main.go
@@ -70,30 +70,30 @@ jobs:
         timeout: "10m"
         exit-code: "1"
 
-  provenance:
-    needs: [build]
-    permissions:
-      actions: read
-      id-token: write
-      packages: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0  # Must use tagged version
-    with:
-      image: ${{ needs.build.outputs.image-name }}
-      digest: ${{ needs.build.outputs.image-digest }}
-      registry-username: ${{ github.actor }}
-    secrets:
-      registry-password: ${{ secrets.GITHUB_TOKEN }}
+  # provenance:
+  #   needs: [build]
+  #   permissions:
+  #     actions: read
+  #     id-token: write
+  #     packages: write
+  #   uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0  # Must use tagged version
+  #   with:
+  #     image: ${{ needs.build.outputs.image-name }}
+  #     digest: ${{ needs.build.outputs.image-digest }}
+  #     registry-username: ${{ github.actor }}
+  #   secrets:
+  #     registry-password: ${{ secrets.GITHUB_TOKEN }}
 
-  verification:
-    needs: [build, provenance]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-    - uses: slsa-framework/slsa-verifier/actions/installer@ea584f4502babc6f60d9bc799dbbb13c1caa9ee6  # v2.7.1
-    - name: Verify SLSA Provenance (slsa-verifier)
-      shell: bash
-      run: |-
-        slsa-verifier verify-image ${{ needs.build.outputs.image-uri }} \
-          --source-uri "${{ needs.build.outputs.source-uri }}" \
-          --source-tag "${{ needs.build.outputs.source-tag }}"
+  # verification:
+  #   needs: [build, provenance]
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: read
+  #   steps:
+  #   - uses: slsa-framework/slsa-verifier/actions/installer@ea584f4502babc6f60d9bc799dbbb13c1caa9ee6  # v2.7.1
+  #   - name: Verify SLSA Provenance (slsa-verifier)
+  #     shell: bash
+  #     run: |-
+  #       slsa-verifier verify-image ${{ needs.build.outputs.image-uri }} \
+  #         --source-uri "${{ needs.build.outputs.source-uri }}" \
+  #         --source-tag "${{ needs.build.outputs.source-tag }}"
