@@ -1,12 +1,9 @@
-![Last commit](https://img.shields.io/github/last-commit/mchmarny/gpuid)
-![Issues](https://img.shields.io/github/issues/mchmarny/gpuid)
-![PRs](https://img.shields.io/github/issues-pr/mchmarny/gpuid)
 ![OnPush](https://github.com/mchmarny/gpuid/actions/workflows/main.yaml/badge.svg)
 ![OnTag](https://github.com/mchmarny/gpuid/actions/workflows/release.yaml/badge.svg)
+![Issues](https://img.shields.io/github/issues/mchmarny/gpuid)
+![PRs](https://img.shields.io/github/issues-pr/mchmarny/gpuid)
 ![Go Report Card](https://goreportcard.com/badge/github.com/mchmarny/gpuid)
 [![codecov](https://codecov.io/gh/mchmarny/gpuid/branch/main/graph/badge.svg)](https://codecov.io/gh/mchmarny/gpuid)
-[![Go Reference](https://pkg.go.dev/badge/github.com/mchmarny/gpuid.svg)](https://pkg.go.dev/github.com/mchmarny/gpuid)
-![Go Version](https://img.shields.io/github/go-mod/go-version/mchmarny/gpuid)
 
 # GPU Serial Number Exporter (gpuid)
 
