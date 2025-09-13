@@ -6,8 +6,9 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${DIR}/common"
 ROOT=$(dirname "${DIR}")
 
-# Check if required tools are installed
-has_tools kubectl
+# Check for required tools
+REQUIRED_TOOLS=(kubectl)
+has_tools "${REQUIRED_TOOLS[@]}"
 
 # Cleanup function for graceful exit
 cleanup() {
