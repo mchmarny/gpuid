@@ -319,7 +319,7 @@ Navigate to https://github.com/mchmarny/gpuid/attestations and pick the version 
 > Update the image digest to the version you end up using.
 
 ```shell
-export IMAGE=ghcr.io/mchmarny/gpuid@sha256:d3bcaca82b15467a12c035dcd9703905fa74fa507237ba31513ab5be46b2def7
+export IMAGE=ghcr.io/mchmarny/gpuid:v0.6.0@sha256:307ae8fe9303fae95e345ab2cad5022835b497aa82e9bd714ae94f7286657c4d
 ```
 
 #### GitHub CLI
@@ -327,7 +327,10 @@ export IMAGE=ghcr.io/mchmarny/gpuid@sha256:d3bcaca82b15467a12c035dcd9703905fa74f
 To verify the attestation on this image using GitHub CLI: 
 
 ```shell
-gh attestation verify "oci://$IMAGE" --repo mchmarny/gpuid
+gh attestation verify "oci://$IMAGE" \
+  --repo mchmarny/gpuid \
+  --predicate-type https://slsa.dev/provenance/v1 \
+  --limit 1
 ```
 
 #### Cosign CLI
@@ -338,7 +341,7 @@ cosign verify-attestation \
     --certificate-github-workflow-repository 'mchmarny/gpuid' \
     --certificate-identity-regexp 'https://github.com/mchmarny/gpuid/*' \
     --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-    $IMAGE 
+    $IMAGE
 ```
 
 ### In-Cluster Policy Enforcement
