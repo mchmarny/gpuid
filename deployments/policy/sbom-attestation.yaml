@@ -1,0 +1,20 @@
+apiVersion: policy.sigstore.dev/v1beta1
+kind: ClusterImagePolicy
+metadata:
+  name: must-have-spdx-cue
+spec:
+  images:
+    - glob: ghcr.io/mchmarny/gpuid*
+  authorities:
+    - name: my-authority
+      keyless:
+        identities:
+          - issuer: https://token.actions.githubusercontent.com
+            subjectRegExp: ^https://github.com/mchmarny/gpuid/.github/workflows/release\.yaml@refs/tags/.*$
+      attestations:
+        - name: must-have-spdx-attestation
+          predicateType: https://spdx.dev/Document
+          policy:
+            type: cue
+            data: |
+              predicateType: "https://spdx.dev/Document"

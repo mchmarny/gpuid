@@ -70,13 +70,13 @@ helm repo update
 helm install policy-controller -n cosign-system sigstore/policy-controller --wait
 
 # Label namespace for policy inclusion
-# kubectl label namespace gpuid policy.sigstore.dev/include=true --overwrite
+kubectl label namespace gpuid policy.sigstore.dev/include=true --overwrite
 
 # Apply image policy
-# kubectl apply -f deployments/policy/slsa-attestation.yaml
+kubectl apply -f deployments/policy/slsa-attestation.yaml
 
 # Run a test pod to verify the image can be pulled and run
-# kubectl -n gpuid run test --image=$IMAGE
+kubectl -n gpuid run test --image=$IMAGE
 
 # Verify metrics are being exposed
 msg "Checking metrics endpoint..."

@@ -334,9 +334,9 @@ gh attestation verify "oci://$IMAGE" --repo mchmarny/gpuid
 
 ```shell
 cosign verify-attestation \
-    --type slsaprovenance \
+    --type https://slsa.dev/provenance/v1 \
     --certificate-github-workflow-repository 'mchmarny/gpuid' \
-    --certificate-identity-regexp 'https://github.com/.*/.*/.github/workflows/.*' \
+    --certificate-identity-regexp 'https://github.com/mchmarny/gpuid/*' \
     --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
     $IMAGE 
 ```

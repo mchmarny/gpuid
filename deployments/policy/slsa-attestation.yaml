@@ -1,7 +1,7 @@
 apiVersion: policy.sigstore.dev/v1beta1
 kind: ClusterImagePolicy
 metadata:
-  name: gpuid-release-require-slsa
+  name: must-have-slsa
 spec:
   images:
     - glob: ghcr.io/mchmarny/gpuid*
@@ -10,7 +10,7 @@ spec:
         url: https://fulcio.sigstore.dev
         identities:
           - issuer: https://token.actions.githubusercontent.com
-            subjectRegExp: ^https://github.com/mchmarny/gpuid/.github/workflows/release\.ya?ml@refs/tags/.*$
+            subjectRegExp: ^https://github.com/mchmarny/gpuid/.github/workflows/release\.yaml@refs/tags/.*$
       ctlog:
         url: https://rekor.sigstore.dev
 
@@ -20,13 +20,18 @@ spec:
           policy:
             type: cue
             data: |
-              // Must be SLSA v1
-              predicateType == "https://slsa.dev/provenance/v1"
-
-              // Pin to your release workflow on tags (matches your payload layout)
-              predicate.buildDefinition.externalParameters.workflow.path == ".github/workflows/release.yaml"
-              predicate.buildDefinition.externalParameters.workflow.ref =~ "^refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
-              predicate.buildDefinition.externalParameters.workflow.repository == "https://github.com/mchmarny/gpuid"
-
-              // Pin source repo too
-              predicate.buildDefinition.externalParameters.source.repository == "https://github.com/mchmarny/gpuid"
+              predicateType: "https://slsa.dev/provenance/v1"
+              predicate: {
+                buildDefinition: {
+                  externalParameters: {
+                    workflow: {
+                      repository:  "https://github.com/mchmarny/gpuid"
+                      path:        ".github/workflows/release.yaml"
+                      ref:         =~ "^refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
+                    }
+                    source: {
+                      repository:  "https://github.com/mchmarny/gpuid"
+                    }
+                  }
+                }
+              }
