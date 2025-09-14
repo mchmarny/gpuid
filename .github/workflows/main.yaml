@@ -26,7 +26,7 @@ jobs:
       security-events: write
       id-token: write
     steps:
-    - uses: mchmarny/common/go-test@4df2bd275f9a4569e7ceadc31b67b043118256ff  # v0.2.0
+    - uses: mchmarny/common/go-test@f18cac716cd9c8178188a58b46384b284964d63e  # v0.2.1
       with:
         go-version: ${{ env.GO_VERSION }}
         scan-severity: ${{ env.ERR_VULNERABILITY_SEV }}

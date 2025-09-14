@@ -308,21 +308,37 @@ s3://bucket-name/prefix/
 
 ## Security and Validation
 
-The `gpuid` container images are built with SLSA (Supply-chain Levels for Software Artifacts). You can verify the image integrity using Sigstore tools.
+The `gpuid` container images are built with SLSA (Supply-chain Levels for Software Artifacts).
 
 ### Manual Verification 
+
+Navigate to https://github.com/mchmarny/gpuid/attestations and pick the version you want to verify. The subject digest at the bottom should match the digest of the image you are deploying.
+
+### Using GitHub CLI 
 
 > Update the image digest to the version you end up using.
 
 ```shell
-export IMAGE=ghcr.io/mchmarny/gpuid@sha256:9080d88115528838c81feaf9955dba5ef74067c628a0d065780eb5bc160361e3
+export IMAGE=ghcr.io/mchmarny/gpuid@sha256:d3bcaca82b15467a12c035dcd9703905fa74fa507237ba31513ab5be46b2def7
+```
 
-cosign verify-attestation \
-    --output json \
-    --type slsaprovenance \
-    --certificate-identity-regexp 'https://github.com/.*/.*/.github/workflows/.*' \
-    --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-    $IMAGE 
+To verify the attestation on this image using GitHub CLI: 
+
+```shell
+gh attestation verify "oci://$IMAGE" --repo mchmarny/gpuid
+```
+
+The key bits of the output are: 
+
+```shell
+The following policy criteria will be enforced:
+- Predicate type must match:................ https://slsa.dev/provenance/v1
+- Source Repository Owner URI must match:... https://github.com/mchmarny
+- Source Repository URI must match:......... https://github.com/mchmarny/gpuid
+- Subject Alternative Name must match regex: (?i)^https://github.com/mchmarny/gpuid/
+- OIDC Issuer must match:................... https://token.actions.githubusercontent.com
+
+✓ Verification succeeded!
 ```
 
 ### In-Cluster Policy Enforcement
