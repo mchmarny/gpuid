@@ -125,8 +125,12 @@ func GetExporterSimple(ctx context.Context, log *slog.Logger, exporterType strin
 
 // Export handles exporting GPU serial numbers for a given pod using the configured exporter.
 func (e *Exporter) Export(ctx context.Context, log *slog.Logger, cluster string, pod *corev1.Pod, node string, serials []string) error {
+	if len(serials) == 0 {
+		return nil
+	}
+
 	if e == nil || e.backend == nil {
-		return fmt.Errorf("exporter is not initialized")
+		return fmt.Errorf("exporter not initialized")
 	}
 
 	if strings.TrimSpace(cluster) == "" {
@@ -137,12 +141,8 @@ func (e *Exporter) Export(ctx context.Context, log *slog.Logger, cluster string,
 		return fmt.Errorf("pod is nil")
 	}
 
-	if len(serials) == 0 {
-		return fmt.Errorf("no serial numbers provided for export")
-	}
-
 	if strings.TrimSpace(node) == "" {
-		return fmt.Errorf("node name is required")
+		return fmt.Errorf("node name required")
 	}
 
 	// Use default logger if none provided
