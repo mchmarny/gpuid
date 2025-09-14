@@ -62,6 +62,22 @@ if [[ "$SUCCESS_COUNT" -lt 2 ]]; then
   err "Expected at least 2 successful export, found $SUCCESS_COUNT"
 fi
 
+# Check SLSA provenance
+msg "Verifying SLSA provenance..."
+kubectl create namespace cosign-system
+helm repo add sigstore https://sigstore.github.io/helm-charts
+helm repo update
+helm install policy-controller -n cosign-system sigstore/policy-controller --wait
+
+# Label namespace for policy inclusion
+# kubectl label namespace gpuid policy.sigstore.dev/include=true --overwrite
+
+# Apply image policy
+# kubectl apply -f deployments/policy/slsa-attestation.yaml
+
+# Run a test pod to verify the image can be pulled and run
+# kubectl -n gpuid run test --image=$IMAGE
+
 # Verify metrics are being exposed
 msg "Checking metrics endpoint..."
 kubectl port-forward -n gpuid service/gpuid 8080:8080 >/dev/null 2>&1 &

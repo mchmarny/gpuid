@@ -314,7 +314,7 @@ The `gpuid` container images are built with SLSA (Supply-chain Levels for Softwa
 
 Navigate to https://github.com/mchmarny/gpuid/attestations and pick the version you want to verify. The subject digest at the bottom should match the digest of the image you are deploying.
 
-### Using GitHub CLI 
+### Using CLIs
 
 > Update the image digest to the version you end up using.
 
@@ -322,23 +322,23 @@ Navigate to https://github.com/mchmarny/gpuid/attestations and pick the version 
 export IMAGE=ghcr.io/mchmarny/gpuid@sha256:d3bcaca82b15467a12c035dcd9703905fa74fa507237ba31513ab5be46b2def7
 ```
 
+#### GitHub CLI
+
 To verify the attestation on this image using GitHub CLI: 
 
 ```shell
 gh attestation verify "oci://$IMAGE" --repo mchmarny/gpuid
 ```
 
-The key bits of the output are: 
+#### Cosign CLI
 
 ```shell
-The following policy criteria will be enforced:
-- Predicate type must match:................ https://slsa.dev/provenance/v1
-- Source Repository Owner URI must match:... https://github.com/mchmarny
-- Source Repository URI must match:......... https://github.com/mchmarny/gpuid
-- Subject Alternative Name must match regex: (?i)^https://github.com/mchmarny/gpuid/
-- OIDC Issuer must match:................... https://token.actions.githubusercontent.com
-
-✓ Verification succeeded!
+cosign verify-attestation \
+    --type slsaprovenance \
+    --certificate-github-workflow-repository 'mchmarny/gpuid' \
+    --certificate-identity-regexp 'https://github.com/.*/.*/.github/workflows/.*' \
+    --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+    $IMAGE 
 ```
 
 ### In-Cluster Policy Enforcement
@@ -363,7 +363,7 @@ kubectl label namespace gpuid policy.sigstore.dev/include=true
 3. Apply the image policy:
 
 ```shell
-kubectl apply -f deployment/policy/slsa-attestation.yaml
+kubectl apply -f deployments/policy/slsa-attestation.yaml
 ```
 
 4. Test the admission policy:
