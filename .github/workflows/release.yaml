@@ -39,7 +39,7 @@ jobs:
     steps:
 
     # build the image
-    - uses: mchmarny/common/go-build@fa896e40f2c60ff0fae8c229d12bb033f3693fc7  # v0.2.3
+    - uses: mchmarny/common/go-build@48628aad732dab74bb355066552ae7819ceea290  # v0.2.4
       id: build
       with:
         main-path: cmd/gpuid/main.go

@@ -34,7 +34,7 @@ func GetSerialNumbers(ctx context.Context, log *slog.Logger, cs *kubernetes.Clie
 		return nil, fmt.Errorf("failed to parse nvidia-smi output: %w", err)
 	}
 
-	log.Debug("retrieved GPU info from pod", "ns", pod.Namespace, "pod", pod.Name, "gpu_count", len(device.GPUs))
+	log.Debug("gpu info", "ns", pod.Namespace, "pod", pod.Name, "gpu_count", len(device.GPUs))
 
 	// in case of duplicate serial numbers
 	serialNumberMap := make(map[string]bool)
@@ -47,7 +47,7 @@ func GetSerialNumbers(ctx context.Context, log *slog.Logger, cs *kubernetes.Clie
 		serialNumbers = append(serialNumbers, serial)
 	}
 
-	log.Debug("found unique GPU serial numbers", "ns", pod.Namespace, "pod", pod.Name, "serial_numbers", len(serialNumbers))
+	log.Debug("gpu serial numbers", "ns", pod.Namespace, "pod", pod.Name, "serial_numbers", len(serialNumbers))
 
 	return serialNumbers, nil
 }
