@@ -46,7 +46,7 @@ func NewServer(opts ...Option) Server {
 		s.logger = logger.NewProductionLogger(logger.Config{})
 	}
 
-	s.logger.Debug("server initialized", "port", s.port)
+	s.logger.Info("server initialized", "port", s.port)
 
 	return s
 }
