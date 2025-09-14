@@ -72,3 +72,31 @@ jobs:
         hide-progress: true
         timeout: "10m"
         exit-code: "1"
+
+  provenance:
+    needs: [build]
+    permissions:
+      actions: read
+      id-token: write
+      packages: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0  # Must use tagged version
+    with:
+      image: ${{ needs.build.outputs.image-name }}
+      digest: ${{ needs.build.outputs.image-digest }}
+      registry-username: ${{ github.actor }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  verification:
+    needs: [build, provenance]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - uses: slsa-framework/slsa-verifier/actions/installer@ea584f4502babc6f60d9bc799dbbb13c1caa9ee6  # v2.7.1
+    - name: Verify SLSA Provenance (slsa-verifier)
+      shell: bash
+      run: |-
+        slsa-verifier verify-image ${{ needs.build.outputs.image-uri }} \
+          --source-uri "${{ needs.build.outputs.source-uri }}" \
+          --source-tag "${{ needs.build.outputs.source-tag }}"
