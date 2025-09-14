@@ -40,3 +40,4 @@ go.work.sum
 .faker
 .uri
 .digest
+sha256:*.jsonl
