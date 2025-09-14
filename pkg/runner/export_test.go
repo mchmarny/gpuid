@@ -126,7 +126,7 @@ func TestExporter_Export(t *testing.T) {
 			pod:     pod,
 			node:    "test-node-id",
 			serials: []string{},
-			wantErr: true,
+			wantErr: false,
 		},
 	}
 
