@@ -7,21 +7,22 @@
 
 # GPU Serial Number Exporter (gpuid)
 
-A Kubernetes-native service that monitors GPU-enabled pods and exports GPU serial numbers to various backends for tracking, monitoring, and analytics. The service watches for pods with NVIDIA device plugin daemonsets, executes `nvidia-smi` to extract GPU serial numbers, and exports structured data to configurable destinations.
+Monitor pods on GPU-accelerated node in Kubernetes cluster and update nodes with chassis and GPU labels serial numbers. Supports serial number export to various state backends for tracking, monitoring, and analyses.
 
 ## Why
 
-Kubernetes nodes in managed services (e.g. AWS EKS, GCP GKE) are ephemeral VMs that can run on different physical hosts over time. When managing GPU workloads, it's crucial to:
+GPU accelerated Kubernetes nodes in operator managed services (e.g. EKS in AWS or GKE in GCP) are ephemeral VMs that can run on top of physical hosts which change over time. Multiple VPs over time may run on a single physical host, so to ensure break-fix context of these nodes it's crucial to:
 
 - Track GPU health and utilization across physical hardware
 - Correlate GPU performance issues with specific hardware units
 - Maintain audit trails for GPU resource allocation
 - Monitor GPU lifecycle in multi-tenant environments
 
-The `gpuid` service provides a lightweight, scalable solution for GPU inventory management in Kubernetes clusters.
+`gpuid` provides a lightweight, scalable solution for GPU inventory management in Kubernetes clusters.
 
 ## Features
 
+- Node labels with the GPU and chassis serial numbers
 - HTTP, PostgreSQL DB, and S3 exporters
 - Connection pooling, retry logic, health checks
 - Structured logging with contextual information
@@ -32,21 +33,19 @@ The `gpuid` service provides a lightweight, scalable solution for GPU inventory 
 
 **gpuid** supports multiple data export backends:
 
-* **StdOut**: Development and debugging
+* **StdOut**: Development and debugging (default)
 * **HTTP**: POSTs to HTTP endpoints
 * **PostgreSQL**: Batch inserts into PostgreSQL database
 * **S3**: Puts CSV object into S3-compatible bucket
 
 ### Stdout Exporter
 
-**Type**: `stdout`
+**Type**: `stdout` (default)
 **Purpose**: Development and debugging, outputs JSON to stdout
 **Configuration**: No additional environment variables required
 
 ```yaml
 env:
-  - name: EXPORTER_TYPE
-    value: 'stdout'
   - name: CLUSTER_NAME
     value: 'validation'
 ```
@@ -247,7 +246,7 @@ CREATE TABLE serials (
     gpu VARCHAR(255) NOT NULL,
     read_time TIMESTAMP WITH TIME ZONE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    UNIQUE(cluster, node, machine, source, gpu, read_time)
+    UNIQUE(cluster, node, machine, source, chassis, gpu, read_time)
 );
 
 -- Optimized indexes for common query patterns

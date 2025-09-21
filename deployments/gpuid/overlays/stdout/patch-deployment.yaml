@@ -11,8 +11,6 @@ spec:
         - name: gpuid
           image: ghcr.io/mchmarny/gpuid:latest
           env:
-            - name: EXPORTER_TYPE
-              value: 'stdout'
             - name: CLUSTER_NAME
               value: 'prod'
             - name: NAMESPACE
