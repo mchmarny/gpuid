@@ -21,8 +21,9 @@ import (
 const (
 	// Label namespace and prefixes
 	labelNS            = "gpuid.github.com"
-	labelChassisPrefix = labelNS + "/chassis-"
-	labelGPUPrefix     = labelNS + "/chassis-gpu-"
+	labelChassisPrefix = "chassis"
+	labelChassisCount  = "chassis-count"
+	labelGPUPrefix     = "gpu"
 
 	// Retry configuration in case of large number of GPU nodes being added all at once
 	maxRetries      = 5
@@ -181,6 +182,7 @@ func calculateGPULabels(log *slog.Logger, serials []*gpu.Serials) map[string]str
 	sortedSerials := make([]*gpu.Serials, len(serials))
 	copy(sortedSerials, serials)
 
+	// Sort by chassis name, placing nils at the end for consistent indexes
 	sort.Slice(sortedSerials, func(i, j int) bool {
 		if sortedSerials[i] == nil {
 			return false
@@ -191,19 +193,27 @@ func calculateGPULabels(log *slog.Logger, serials []*gpu.Serials) map[string]str
 		return sortedSerials[i].Chassis < sortedSerials[j].Chassis
 	})
 
+	chassisCount := 0
+
 	// Generate labels
 	for i, s := range sortedSerials {
 		if s == nil {
 			continue
 		}
 
-		// Chassis label
-		if s.Chassis != "" {
-			chassisLabel := fmt.Sprintf("%s%d", labelChassisPrefix, i)
-			labels[chassisLabel] = sanitizeLabelValue(s.Chassis)
+		// increment chassis count only for non-nil entries
+		chassisCount++
+
+		// parse and sanitize chassis serial number
+		chassisSerial := sanitizeLabelValue(s.Chassis)
+
+		// set chassis label if serial number is present
+		if chassisSerial != notSetDefault {
+			chassisLabel := fmt.Sprintf("%s/%s-%d", labelNS, labelChassisPrefix, i)
+			labels[chassisLabel] = chassisSerial
 		}
 
-		// Sort GPU serials for predictable order
+		// sort GPU serials for predictable order
 		gpuSerials := make([]string, len(s.GPU))
 		copy(gpuSerials, s.GPU)
 		sort.Strings(gpuSerials)
@@ -213,12 +223,21 @@ func calculateGPULabels(log *slog.Logger, serials []*gpu.Serials) map[string]str
 			if g == "" {
 				continue
 			}
-			gpuLabel := fmt.Sprintf("%s%d-%d", labelGPUPrefix, i, j)
-			chassisValue := sanitizeLabelValue(s.Chassis)
-			gpuValue := sanitizeLabelValue(g)
-			labels[gpuLabel] = fmt.Sprintf("%s-%s", chassisValue, gpuValue)
+
+			// GPU label - no chassis prefix by default (h100)
+			gpuLabel := fmt.Sprintf("%s/%s-%d", labelNS, labelGPUPrefix, j)
+			if chassisSerial != notSetDefault {
+				// if chassis has a serial number, then include its index in the GPU label
+				gpuLabel = fmt.Sprintf("%s/%s-%d-%s-%d", labelNS, labelChassisPrefix, i, labelGPUPrefix, j)
+			}
+
+			labels[gpuLabel] = sanitizeLabelValue(g)
 		}
 	}
+
+	// Chassis count
+	chassisCountLabel := fmt.Sprintf("%s/%s", labelNS, labelChassisCount)
+	labels[chassisCountLabel] = fmt.Sprintf("%d", chassisCount)
 
 	return labels
 }

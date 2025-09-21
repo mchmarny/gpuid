@@ -79,16 +79,17 @@ func TestEnsureLabels(t *testing.T) {
 			expectedLabels: map[string]string{
 				"existing":                         "label",
 				"gpuid.github.com/chassis-0":       "chassis1",
-				"gpuid.github.com/chassis-gpu-0-0": "chassis1-gpu1",
-				"gpuid.github.com/chassis-gpu-0-1": "chassis1-gpu2",
+				"gpuid.github.com/chassis-0-gpu-0": "gpu1",
+				"gpuid.github.com/chassis-0-gpu-1": "gpu2",
+				"gpuid.github.com/chassis-count":   "1",
 			},
 		},
 		{
 			name: "replace existing GPU labels",
 			initialLabels: map[string]string{
 				"existing":                         "label",
-				"gpuid.github.com/chassis-0":       "oldchassis",
-				"gpuid.github.com/chassis-gpu-0-0": "oldchassis-oldgpu",
+				"gpuid.github.com/chassis-0":       "chassis1",
+				"gpuid.github.com/chassis-0-gpu-0": "oldgpu",
 			},
 			serials: []*gpu.Serials{
 				{
@@ -99,28 +100,30 @@ func TestEnsureLabels(t *testing.T) {
 			expectedLabels: map[string]string{
 				"existing":                         "label",
 				"gpuid.github.com/chassis-0":       "newchassis",
-				"gpuid.github.com/chassis-gpu-0-0": "newchassis-newgpu",
+				"gpuid.github.com/chassis-0-gpu-0": "newgpu",
+				"gpuid.github.com/chassis-count":   "1",
 			},
 		},
 		{
-			name:          "handle multiple chassis",
+			name:          "handle multiple chassis with ordering",
 			initialLabels: map[string]string{},
 			serials: []*gpu.Serials{
 				{
 					Chassis: "chassis2",
-					GPU:     []string{"gpu3"},
+					GPU:     []string{"gpu0"},
 				},
 				{
 					Chassis: "chassis1",
-					GPU:     []string{"gpu1", "gpu2"},
+					GPU:     []string{"gpu0", "gpu1"},
 				},
 			},
 			expectedLabels: map[string]string{
 				"gpuid.github.com/chassis-0":       "chassis1", // sorted by chassis name
-				"gpuid.github.com/chassis-gpu-0-0": "chassis1-gpu1",
-				"gpuid.github.com/chassis-gpu-0-1": "chassis1-gpu2",
+				"gpuid.github.com/chassis-0-gpu-0": "gpu0",
+				"gpuid.github.com/chassis-0-gpu-1": "gpu1",
 				"gpuid.github.com/chassis-1":       "chassis2",
-				"gpuid.github.com/chassis-gpu-1-0": "chassis2-gpu3",
+				"gpuid.github.com/chassis-1-gpu-0": "gpu0",
+				"gpuid.github.com/chassis-count":   "2",
 			},
 		},
 		{
@@ -142,7 +145,8 @@ func TestEnsureLabels(t *testing.T) {
 			},
 			expectedLabels: map[string]string{
 				"gpuid.github.com/chassis-0":       "chassis1",
-				"gpuid.github.com/chassis-gpu-0-0": "chassis1-gpu1",
+				"gpuid.github.com/chassis-0-gpu-0": "gpu1",
+				"gpuid.github.com/chassis-count":   "1",
 			},
 			shouldFail: true,
 			failCount:  2, // Fail first 2 attempts, succeed on 3rd
@@ -236,8 +240,9 @@ func TestCalculateGPULabels(t *testing.T) {
 			},
 			expectedLabels: map[string]string{
 				"gpuid.github.com/chassis-0":       "chassis1",
-				"gpuid.github.com/chassis-gpu-0-0": "chassis1-gpu1", // Should be sorted
-				"gpuid.github.com/chassis-gpu-0-1": "chassis1-gpu2",
+				"gpuid.github.com/chassis-0-gpu-0": "gpu1", // Should be sorted
+				"gpuid.github.com/chassis-0-gpu-1": "gpu2",
+				"gpuid.github.com/chassis-count":   "1",
 			},
 		},
 		{
@@ -254,9 +259,10 @@ func TestCalculateGPULabels(t *testing.T) {
 			},
 			expectedLabels: map[string]string{
 				"gpuid.github.com/chassis-0":       "chassis1", // Sorted by chassis name
-				"gpuid.github.com/chassis-gpu-0-0": "chassis1-gpu1",
+				"gpuid.github.com/chassis-0-gpu-0": "gpu1",
 				"gpuid.github.com/chassis-1":       "chassis2",
-				"gpuid.github.com/chassis-gpu-1-0": "chassis2-gpu3",
+				"gpuid.github.com/chassis-1-gpu-0": "gpu3",
+				"gpuid.github.com/chassis-count":   "2",
 			},
 		},
 		{
@@ -271,7 +277,8 @@ func TestCalculateGPULabels(t *testing.T) {
 			},
 			expectedLabels: map[string]string{
 				"gpuid.github.com/chassis-0":       "chassis1",
-				"gpuid.github.com/chassis-gpu-0-0": "chassis1-gpu1",
+				"gpuid.github.com/chassis-0-gpu-0": "gpu1",
+				"gpuid.github.com/chassis-count":   "1",
 			},
 		},
 	}
@@ -349,23 +356,8 @@ func TestNeedsLabelUpdate(t *testing.T) {
 	}
 }
 
-// Example of how to create a real Labeler for integration tests
-func ExampleLabeler() {
-	// This example shows how to create a Labeler for integration testing
-	// var clientset *kubernetes.Clientset
-	// labeler := NewLabelUpdater(clientset)
-	// ctx := context.Background()
-	// logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{}))
-	// serials := []*gpu.Serials{{Chassis: "test", GPU: []string{"gpu1"}}}
-	// err := EnsureLabels(ctx, logger, labeler, "node-name", serials)
-	// if err != nil {
-	//     log.Fatal(err)
-	// }
-}
-
 // TestLabelerImplementsInterface ensures Labeler implements Updater interface at compile time
 func TestLabelerImplementsInterface(t *testing.T) {
-	// This test will fail to compile if Labeler doesn't implement Updater
 	var _ Updater = (*Labeler)(nil)
 	t.Log("Labeler correctly implements Updater interface")
 }
