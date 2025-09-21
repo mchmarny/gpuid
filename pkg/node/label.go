@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -27,7 +28,46 @@ const (
 	maxRetries      = 5
 	retryBackoff    = 2 * time.Second
 	maxRetryBackoff = 45 * time.Second
+
+	notSetDefault = "na"
 )
+
+// labelValueRegex matches valid Kubernetes label values
+// Valid regex: (([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?
+var labelValueRegex = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9\-_.]*[A-Za-z0-9])?$`)
+
+// sanitizeLabelValue converts any string into a valid Kubernetes label value
+// Invalid characters are replaced with underscores, and N/A is converted to "unknown"
+func sanitizeLabelValue(value string) string {
+	if value == "" {
+		return notSetDefault
+	}
+
+	// Handle common "N/A" case from nvidia-smi output
+	if value == "N/A" {
+		return notSetDefault
+	}
+
+	// Replace invalid characters with hyphens
+	sanitized := regexp.MustCompile(`[^A-Za-z0-9\-_.]`).ReplaceAllString(value, "-")
+
+	// Ensure it starts and ends with alphanumeric character
+	// Trim leading/trailing non-alphanumeric characters
+	sanitized = regexp.MustCompile(`^[^A-Za-z0-9]+`).ReplaceAllString(sanitized, "")
+	sanitized = regexp.MustCompile(`[^A-Za-z0-9]+$`).ReplaceAllString(sanitized, "")
+
+	// If empty after sanitization, use a default
+	if sanitized == "" {
+		return notSetDefault
+	}
+
+	// Validate the result
+	if !labelValueRegex.MatchString(sanitized) {
+		return notSetDefault
+	}
+
+	return strings.TrimSpace(sanitized)
+}
 
 // Updater interface for testability
 type Updater interface {
@@ -69,6 +109,12 @@ func EnsureLabels(ctx context.Context, log *slog.Logger, labeler Updater, nodeNa
 			// Don't retry permission errors - they won't resolve with retries
 			if errors.IsForbidden(err) {
 				log.Error("insufficient permissions to update node labels - check RBAC configuration",
+					"node", nodeName, "error", err)
+				return false, err // Return the error to stop retrying
+			}
+			// Don't retry validation errors - they indicate a bug in label value generation
+			if errors.IsInvalid(err) {
+				log.Error("invalid label values - this indicates a bug in label sanitization",
 					"node", nodeName, "error", err)
 				return false, err // Return the error to stop retrying
 			}
@@ -154,7 +200,7 @@ func calculateGPULabels(log *slog.Logger, serials []*gpu.Serials) map[string]str
 		// Chassis label
 		if s.Chassis != "" {
 			chassisLabel := fmt.Sprintf("%s%d", labelChassisPrefix, i)
-			labels[chassisLabel] = s.Chassis
+			labels[chassisLabel] = sanitizeLabelValue(s.Chassis)
 		}
 
 		// Sort GPU serials for predictable order
@@ -168,7 +214,9 @@ func calculateGPULabels(log *slog.Logger, serials []*gpu.Serials) map[string]str
 				continue
 			}
 			gpuLabel := fmt.Sprintf("%s%d-%d", labelGPUPrefix, i, j)
-			labels[gpuLabel] = fmt.Sprintf("%s-%s", s.Chassis, g)
+			chassisValue := sanitizeLabelValue(s.Chassis)
+			gpuValue := sanitizeLabelValue(g)
+			labels[gpuLabel] = fmt.Sprintf("%s-%s", chassisValue, gpuValue)
 		}
 	}
 

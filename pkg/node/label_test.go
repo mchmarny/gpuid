@@ -392,3 +392,105 @@ func BenchmarkCalculateGPULabels(b *testing.B) {
 		calculateGPULabels(logger, serials)
 	}
 }
+
+func TestSanitizeLabelValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "N/A should become unknown",
+			input:    "N/A",
+			expected: notSetDefault,
+		},
+		{
+			name:     "Valid alphanumeric should remain unchanged",
+			input:    "1652823055647",
+			expected: "1652823055647",
+		},
+		{
+			name:     "Valid with dashes and underscores",
+			input:    "valid-value_123",
+			expected: "valid-value_123",
+		},
+		{
+			name:     "Invalid characters should be replaced with underscores",
+			input:    "invalid@value#123",
+			expected: "invalid-value-123",
+		},
+		{
+			name:     "Leading/trailing invalid chars should be trimmed",
+			input:    "!@#valid123$%^",
+			expected: "valid123",
+		},
+		{
+			name:     "Empty string should remain empty",
+			input:    "",
+			expected: notSetDefault,
+		},
+		{
+			name:     "Only invalid characters should become unknown",
+			input:    "!@#$%^",
+			expected: notSetDefault,
+		},
+		{
+			name:     "Real chassis serial with periods",
+			input:    "1234.5678.9012",
+			expected: "1234.5678.9012",
+		},
+		{
+			name:     "GPU serial with special chars",
+			input:    "GPU-123/456",
+			expected: "GPU-123-456",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := sanitizeLabelValue(tt.input)
+			if result != tt.expected {
+				t.Errorf("sanitizeLabelValue(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+
+			// Verify the result is a valid Kubernetes label value (unless empty)
+			if result != notSetDefault && !labelValueRegex.MatchString(result) {
+				t.Errorf("sanitizeLabelValue(%q) = %q is not a valid Kubernetes label value", tt.input, result)
+			}
+		})
+	}
+}
+
+func TestSanitizeLabelValuePatterns(t *testing.T) {
+	// Test patterns from the actual error logs
+	problematicValues := []string{
+		"N/A",
+		"N/A-1652823055647",
+		"N/A-1652923033989",
+		"N/A-1652823054567",
+		"N/A-1652923034028",
+		"N/A-1653023018213",
+		"N/A-1652923034291",
+		"N/A-1652823055931",
+		"N/A-1652823055642",
+	}
+
+	for _, value := range problematicValues {
+		t.Run("problematic_"+value, func(t *testing.T) {
+			result := sanitizeLabelValue(value)
+
+			// Should not be the original problematic value
+			if result == value {
+				t.Errorf("sanitizeLabelValue(%q) returned the original problematic value", value)
+			}
+
+			// Should be a valid Kubernetes label value
+			if result != "" && !labelValueRegex.MatchString(result) {
+				t.Errorf("sanitizeLabelValue(%q) = %q is not a valid Kubernetes label value", value, result)
+			}
+
+			// Log what the transformation produces
+			t.Logf("sanitizeLabelValue(%q) = %q", value, result)
+		})
+	}
+}
