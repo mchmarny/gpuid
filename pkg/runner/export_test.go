@@ -22,7 +22,7 @@ func TestGetExporterSimple(t *testing.T) {
 		{"stdout", "stdout", false},
 		{"postgres", "postgres", true}, // Will fail without DB connection, but validates config
 		{"http", "http", true},         // Will fail without endpoint, but validates config
-		{"empty_type", "", true},
+		{"empty_type", "", false},      // Defaults to stdout
 		{"unknown_type", "unknown", true},
 	}
 

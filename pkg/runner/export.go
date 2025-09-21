@@ -54,7 +54,7 @@ type Exporter struct {
 // GetExporter initializes an exporter based on the provided configuration.
 func GetExporter(ctx context.Context, log *slog.Logger, config ExporterConfig) (*Exporter, error) {
 	if strings.TrimSpace(config.Type) == "" {
-		config.Type = "stdout" // Default to stdout if not specified
+		config.Type = DefaultExporterType // Default to stdout if not specified
 	}
 
 	// Apply defaults for optional configuration
@@ -81,7 +81,7 @@ func GetExporter(ctx context.Context, log *slog.Logger, config ExporterConfig) (
 
 	var err error
 	switch config.Type {
-	case "stdout":
+	case DefaultExporterType:
 		e.backend = stdout.New()
 	case "s3":
 		e.backend, err = s3.New(ctx)
