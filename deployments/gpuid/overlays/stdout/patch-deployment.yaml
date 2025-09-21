@@ -17,3 +17,7 @@ spec:
               value: 'gpu-operator'
             - name: LABEL_SELECTOR
               value: 'app=nvidia-device-plugin-daemonset'
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: system-workload
