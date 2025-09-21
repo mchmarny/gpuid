@@ -47,7 +47,7 @@ type GPU struct {
 	BoardPartNumber           string                    `xml:"board_part_number" json:"boardPartNumber" yaml:"boardPartNumber"`
 	GpuPartNumber             string                    `xml:"gpu_part_number" json:"gpuPartNumber" yaml:"gpuPartNumber"`
 	GpuFruPartNumber          string                    `xml:"gpu_fru_part_number" json:"gpuFRUPartNumber" yaml:"gpuFRUPartNumber"`
-	Platforminfo              Platforminfo              `xml:"platformInfo" json:"platformInfo" yaml:"platformInfo"`
+	PlatformInfo              PlatformInfo              `xml:"platformInfo" json:"platformInfo" yaml:"platformInfo"`
 	InforomVersion            InforomVersion            `xml:"inforom_version" json:"inforomVersion" yaml:"inforomVersion"`
 	InforomBbxFlush           InforomBbxFlush           `xml:"inforom_bbx_flush" json:"inforomBBXFlush" yaml:"inforomBBXFlush"`
 	GpuOperationMode          OperationMode             `xml:"gpu_operation_mode" json:"gpuOperationMode" yaml:"gpuOperationMode"`
@@ -107,7 +107,7 @@ type DriverModel struct {
 	PendingDm string `xml:"pending_dm" json:"pendingDm" yaml:"pendingDm"`
 }
 
-type Platforminfo struct {
+type PlatformInfo struct {
 	ChassisSerialNumber string `xml:"chassis_serial_number" json:"chassisSerialNumber" yaml:"chassisSerialNumber"`
 	SlotNumber          string `xml:"slot_number" json:"slotNumber" yaml:"slotNumber"`
 	TrayIndex           string `xml:"tray_index" json:"trayIndex" yaml:"trayIndex"`

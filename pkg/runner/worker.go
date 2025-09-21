@@ -155,6 +155,19 @@ func processPod(
 		return nil
 	}
 
+	// Update gpu and chassis labels on the pod underlining node
+	labeler := node.NewLabelUpdater(cs)
+	if err = node.EnsureLabels(pctx, log, labeler, pod.Spec.NodeName, serials); err != nil {
+		counterErr.Increment(pod.Spec.NodeName, pod.Name)
+		log.Error("failed to ensure node labels",
+			"pod", pod.Name,
+			"uid", pod.UID,
+			"node", pod.Spec.NodeName,
+			"err", err,
+		)
+		return fmt.Errorf("failed to ensure node labels: %w", err)
+	}
+
 	// Retrieve node provider ID for export metadata
 	nodeInfo, err := node.GetNodeProviderID(pctx, log, cs, cfg, pod.Spec.NodeName)
 	if err != nil {

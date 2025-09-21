@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/mchmarny/gpuid/pkg/gpu"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -85,7 +86,7 @@ func TestExporter_Export(t *testing.T) {
 		cluster string
 		pod     *corev1.Pod
 		node    string
-		serials []string
+		serials []*gpu.Serials
 		wantErr bool
 	}{
 		{
@@ -93,7 +94,7 @@ func TestExporter_Export(t *testing.T) {
 			cluster: "test-cluster",
 			pod:     pod,
 			node:    "test-node-id",
-			serials: []string{"serial1", "serial2"},
+			serials: []*gpu.Serials{{Chassis: "chassis1", GPU: []string{"serial1", "serial2"}}, {Chassis: "chassis2", GPU: []string{"serial3"}}},
 			wantErr: false,
 		},
 		{
@@ -101,7 +102,7 @@ func TestExporter_Export(t *testing.T) {
 			cluster: "",
 			pod:     pod,
 			node:    "test-node-id",
-			serials: []string{"serial1"},
+			serials: []*gpu.Serials{{Chassis: "chassis1", GPU: []string{"serial1"}}},
 			wantErr: true,
 		},
 		{
@@ -109,7 +110,7 @@ func TestExporter_Export(t *testing.T) {
 			cluster: "test-cluster",
 			pod:     nil,
 			node:    "test-node-id",
-			serials: []string{"serial1"},
+			serials: []*gpu.Serials{{Chassis: "chassis1", GPU: []string{"serial1"}}},
 			wantErr: true,
 		},
 		{
@@ -117,7 +118,7 @@ func TestExporter_Export(t *testing.T) {
 			cluster: "test-cluster",
 			pod:     pod,
 			node:    "",
-			serials: []string{"serial1"},
+			serials: []*gpu.Serials{{Chassis: "chassis1", GPU: []string{"serial1"}}},
 			wantErr: true,
 		},
 		{
@@ -125,7 +126,7 @@ func TestExporter_Export(t *testing.T) {
 			cluster: "test-cluster",
 			pod:     pod,
 			node:    "test-node-id",
-			serials: []string{},
+			serials: []*gpu.Serials{},
 			wantErr: false,
 		},
 	}

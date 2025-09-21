@@ -11,6 +11,7 @@ type SerialNumberReading struct {
 	Node    string    `json:"node" yaml:"node"`
 	Machine string    `json:"machine" yaml:"machine"`
 	Source  string    `json:"source" yaml:"source"`
+	Chassis string    `json:"chassis" yaml:"chassis"`
 	GPU     string    `json:"gpu" yaml:"gpu"`
 	Time    time.Time `json:"time" yaml:"time"`
 }

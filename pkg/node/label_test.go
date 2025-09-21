@@ -1,0 +1,394 @@
+package node
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"os"
+	"testing"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/mchmarny/gpuid/pkg/gpu"
+)
+
+// Compile-time check to ensure MockUpdater implements Updater interface
+var _ Updater = (*MockUpdater)(nil)
+
+// MockUpdater for testing - implements the Updater interface
+type MockUpdater struct {
+	node        *corev1.Node
+	updateCount int
+	shouldFail  bool
+	failCount   int
+}
+
+func NewMockUpdater(node *corev1.Node) *MockUpdater {
+	return &MockUpdater{node: node}
+}
+
+func (m *MockUpdater) GetNode(_ context.Context, _ string) (*corev1.Node, error) {
+	if m.node == nil {
+		return nil, errors.New("node not found")
+	}
+	// Return a copy to simulate Kubernetes behavior
+	nodeCopy := m.node.DeepCopy()
+	return nodeCopy, nil
+}
+
+func (m *MockUpdater) UpdateNode(_ context.Context, node *corev1.Node) (*corev1.Node, error) {
+	m.updateCount++
+
+	if m.shouldFail && m.updateCount <= m.failCount {
+		return nil, errors.New("simulated update failure")
+	}
+
+	// Simulate successful update
+	m.node = node.DeepCopy()
+	return m.node, nil
+}
+
+func (m *MockUpdater) SetFailure(shouldFail bool, failCount int) {
+	m.shouldFail = shouldFail
+	m.failCount = failCount
+}
+
+func TestEnsureLabels(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	ctx := context.Background()
+
+	tests := []struct {
+		name           string
+		initialLabels  map[string]string
+		serials        []*gpu.Serials
+		expectedLabels map[string]string
+		shouldFail     bool
+		failCount      int
+	}{
+		{
+			name:          "add new GPU labels",
+			initialLabels: map[string]string{"existing": "label"},
+			serials: []*gpu.Serials{
+				{
+					Chassis: "chassis1",
+					GPU:     []string{"gpu1", "gpu2"},
+				},
+			},
+			expectedLabels: map[string]string{
+				"existing":                         "label",
+				"gpuid.github.com/chassis-0":       "chassis1",
+				"gpuid.github.com/chassis-gpu-0-0": "chassis1-gpu1",
+				"gpuid.github.com/chassis-gpu-0-1": "chassis1-gpu2",
+			},
+		},
+		{
+			name: "replace existing GPU labels",
+			initialLabels: map[string]string{
+				"existing":                         "label",
+				"gpuid.github.com/chassis-0":       "oldchassis",
+				"gpuid.github.com/chassis-gpu-0-0": "oldchassis-oldgpu",
+			},
+			serials: []*gpu.Serials{
+				{
+					Chassis: "newchassis",
+					GPU:     []string{"newgpu"},
+				},
+			},
+			expectedLabels: map[string]string{
+				"existing":                         "label",
+				"gpuid.github.com/chassis-0":       "newchassis",
+				"gpuid.github.com/chassis-gpu-0-0": "newchassis-newgpu",
+			},
+		},
+		{
+			name:          "handle multiple chassis",
+			initialLabels: map[string]string{},
+			serials: []*gpu.Serials{
+				{
+					Chassis: "chassis2",
+					GPU:     []string{"gpu3"},
+				},
+				{
+					Chassis: "chassis1",
+					GPU:     []string{"gpu1", "gpu2"},
+				},
+			},
+			expectedLabels: map[string]string{
+				"gpuid.github.com/chassis-0":       "chassis1", // sorted by chassis name
+				"gpuid.github.com/chassis-gpu-0-0": "chassis1-gpu1",
+				"gpuid.github.com/chassis-gpu-0-1": "chassis1-gpu2",
+				"gpuid.github.com/chassis-1":       "chassis2",
+				"gpuid.github.com/chassis-gpu-1-0": "chassis2-gpu3",
+			},
+		},
+		{
+			name:          "handle empty serials",
+			initialLabels: map[string]string{"existing": "label"},
+			serials:       []*gpu.Serials{},
+			expectedLabels: map[string]string{
+				"existing": "label",
+			},
+		},
+		{
+			name:          "retry on failure",
+			initialLabels: map[string]string{},
+			serials: []*gpu.Serials{
+				{
+					Chassis: "chassis1",
+					GPU:     []string{"gpu1"},
+				},
+			},
+			expectedLabels: map[string]string{
+				"gpuid.github.com/chassis-0":       "chassis1",
+				"gpuid.github.com/chassis-gpu-0-0": "chassis1-gpu1",
+			},
+			shouldFail: true,
+			failCount:  2, // Fail first 2 attempts, succeed on 3rd
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock node with initial labels
+			node := &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-node",
+					Labels: make(map[string]string),
+				},
+			}
+			for k, v := range tt.initialLabels {
+				node.Labels[k] = v
+			}
+
+			// Create mock updater
+			mockUpdater := NewMockUpdater(node)
+			if tt.shouldFail {
+				mockUpdater.SetFailure(true, tt.failCount)
+			}
+
+			// Test the function
+			err := EnsureLabels(ctx, logger, mockUpdater, "test-node", tt.serials)
+
+			if tt.shouldFail && tt.failCount >= maxRetries {
+				if err == nil {
+					t.Error("Expected error due to max retries exceeded, but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			// Verify labels
+			finalLabels := mockUpdater.node.Labels
+			for k, expectedV := range tt.expectedLabels {
+				if actualV, exists := finalLabels[k]; !exists {
+					t.Errorf("Expected label %s not found", k)
+				} else if actualV != expectedV {
+					t.Errorf("Label %s: expected %s, got %s", k, expectedV, actualV)
+				}
+			}
+
+			// Verify no unexpected GPU labels
+			for k := range finalLabels {
+				if _, expected := tt.expectedLabels[k]; !expected {
+					if k != "existing" { // Allow non-GPU labels
+						t.Errorf("Unexpected label found: %s", k)
+					}
+				}
+			}
+
+			// Verify retry behavior
+			if tt.shouldFail {
+				expectedUpdates := tt.failCount + 1 // Failed attempts + successful attempt
+				if mockUpdater.updateCount != expectedUpdates {
+					t.Errorf("Expected %d update attempts, got %d", expectedUpdates, mockUpdater.updateCount)
+				}
+			}
+		})
+	}
+}
+
+func TestCalculateGPULabels(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+	tests := []struct {
+		name           string
+		serials        []*gpu.Serials
+		expectedLabels map[string]string
+	}{
+		{
+			name:           "empty serials",
+			serials:        []*gpu.Serials{},
+			expectedLabels: map[string]string{},
+		},
+		{
+			name: "single chassis with multiple GPUs",
+			serials: []*gpu.Serials{
+				{
+					Chassis: "chassis1",
+					GPU:     []string{"gpu2", "gpu1"}, // Test sorting
+				},
+			},
+			expectedLabels: map[string]string{
+				"gpuid.github.com/chassis-0":       "chassis1",
+				"gpuid.github.com/chassis-gpu-0-0": "chassis1-gpu1", // Should be sorted
+				"gpuid.github.com/chassis-gpu-0-1": "chassis1-gpu2",
+			},
+		},
+		{
+			name: "multiple chassis",
+			serials: []*gpu.Serials{
+				{
+					Chassis: "chassis2",
+					GPU:     []string{"gpu3"},
+				},
+				{
+					Chassis: "chassis1",
+					GPU:     []string{"gpu1"},
+				},
+			},
+			expectedLabels: map[string]string{
+				"gpuid.github.com/chassis-0":       "chassis1", // Sorted by chassis name
+				"gpuid.github.com/chassis-gpu-0-0": "chassis1-gpu1",
+				"gpuid.github.com/chassis-1":       "chassis2",
+				"gpuid.github.com/chassis-gpu-1-0": "chassis2-gpu3",
+			},
+		},
+		{
+			name: "handle nil entries",
+			serials: []*gpu.Serials{
+				nil,
+				{
+					Chassis: "chassis1",
+					GPU:     []string{"gpu1"},
+				},
+				nil,
+			},
+			expectedLabels: map[string]string{
+				"gpuid.github.com/chassis-0":       "chassis1",
+				"gpuid.github.com/chassis-gpu-0-0": "chassis1-gpu1",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			labels := calculateGPULabels(logger, tt.serials)
+
+			if len(labels) != len(tt.expectedLabels) {
+				t.Errorf("Expected %d labels, got %d", len(tt.expectedLabels), len(labels))
+			}
+
+			for k, expectedV := range tt.expectedLabels {
+				if actualV, exists := labels[k]; !exists {
+					t.Errorf("Expected label %s not found", k)
+				} else if actualV != expectedV {
+					t.Errorf("Label %s: expected %s, got %s", k, expectedV, actualV)
+				}
+			}
+		})
+	}
+}
+
+func TestNeedsLabelUpdate(t *testing.T) {
+	tests := []struct {
+		name     string
+		current  map[string]string
+		desired  map[string]string
+		expected bool
+	}{
+		{
+			name:     "no update needed",
+			current:  map[string]string{"gpuid.github.com/chassis-0": "chassis1"},
+			desired:  map[string]string{"gpuid.github.com/chassis-0": "chassis1"},
+			expected: false,
+		},
+		{
+			name:     "new label needed",
+			current:  map[string]string{},
+			desired:  map[string]string{"gpuid.github.com/chassis-0": "chassis1"},
+			expected: true,
+		},
+		{
+			name:     "label removal needed",
+			current:  map[string]string{"gpuid.github.com/chassis-0": "chassis1"},
+			desired:  map[string]string{},
+			expected: true,
+		},
+		{
+			name:     "label value change needed",
+			current:  map[string]string{"gpuid.github.com/chassis-0": "old"},
+			desired:  map[string]string{"gpuid.github.com/chassis-0": "new"},
+			expected: true,
+		},
+		{
+			name: "ignore non-GPU labels",
+			current: map[string]string{
+				"other-label":                "value",
+				"gpuid.github.com/chassis-0": "chassis1",
+			},
+			desired: map[string]string{
+				"gpuid.github.com/chassis-0": "chassis1",
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := needsLabelUpdate(tt.current, tt.desired)
+			if result != tt.expected {
+				t.Errorf("Expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+// Example of how to create a real Labeler for integration tests
+func ExampleLabeler() {
+	// This example shows how to create a Labeler for integration testing
+	// var clientset *kubernetes.Clientset
+	// labeler := NewLabelUpdater(clientset)
+	// ctx := context.Background()
+	// logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{}))
+	// serials := []*gpu.Serials{{Chassis: "test", GPU: []string{"gpu1"}}}
+	// err := EnsureLabels(ctx, logger, labeler, "node-name", serials)
+	// if err != nil {
+	//     log.Fatal(err)
+	// }
+}
+
+// TestLabelerImplementsInterface ensures Labeler implements Updater interface at compile time
+func TestLabelerImplementsInterface(t *testing.T) {
+	// This test will fail to compile if Labeler doesn't implement Updater
+	var _ Updater = (*Labeler)(nil)
+	t.Log("Labeler correctly implements Updater interface")
+}
+
+// Benchmark for performance testing with large numbers of serials
+func BenchmarkCalculateGPULabels(b *testing.B) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	// Create 100 chassis with 8 GPUs each (simulating large-scale scenario)
+	serials := make([]*gpu.Serials, 100)
+	for i := 0; i < 100; i++ {
+		gpus := make([]string, 8)
+		for j := 0; j < 8; j++ {
+			gpus[j] = fmt.Sprintf("gpu-%d-%d", i, j)
+		}
+		serials[i] = &gpu.Serials{
+			Chassis: fmt.Sprintf("chassis-%d", i),
+			GPU:     gpus,
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		calculateGPULabels(logger, serials)
+	}
+}

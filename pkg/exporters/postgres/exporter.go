@@ -149,6 +149,7 @@ func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.S
 			record.Node,
 			record.Machine,
 			record.Source,
+			setDefaultIfEmpty(record.Chassis, "unknown"),
 			record.GPU,
 			record.Time,
 			now,
@@ -205,10 +206,11 @@ func (e *Exporter) initializeSchema(ctx context.Context) error {
 			node VARCHAR(255) NOT NULL,
 			machine VARCHAR(255) NOT NULL,
 			source VARCHAR(255) NOT NULL,
+			chassis VARCHAR(255) NOT NULL,
 			gpu VARCHAR(255) NOT NULL,
 			read_time TIMESTAMP WITH TIME ZONE NOT NULL,
 			created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-			UNIQUE(cluster, node, machine, source, gpu, read_time)
+			UNIQUE(cluster, node, machine, source, chassis, gpu, read_time)
 		)`, e.config.Table)
 
 	_, err := e.db.ExecContext(ctx, createTableQuery)
@@ -294,4 +296,12 @@ func getEnvAsInt(key string, defaultValue int) int {
 		}
 	}
 	return defaultValue
+}
+
+// setDefaultIfEmpty returns defaultValue if value is an empty string.
+func setDefaultIfEmpty(value string, defaultValue string) string {
+	if value == "" {
+		value = defaultValue
+	}
+	return value
 }

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"sort"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -15,11 +17,17 @@ import (
 	utilexec "k8s.io/client-go/util/exec"
 )
 
+// Serials represents detailed information about a single GPU.
+type Serials struct {
+	Chassis string   `json:"chassis" yaml:"chassis"`
+	GPU     []string `json:"gpu" yaml:"gpu"`
+}
+
 // GetSerialNumbers retrieves unique GPU serial numbers from a specified pod and container.
 // It executes the `nvidia-smi -q -x` command inside the container, parses the XML output,
 // and extracts the serial numbers of all GPUs present. The function ensures that only
 // unique serial numbers are returned, handling any duplicates that may arise.
-func GetSerialNumbers(ctx context.Context, log *slog.Logger, cs *kubernetes.Clientset, cfg *rest.Config, pod *corev1.Pod, container string) ([]string, error) {
+func GetSerialNumbers(ctx context.Context, log *slog.Logger, cs *kubernetes.Clientset, cfg *rest.Config, pod *corev1.Pod, container string) ([]*Serials, error) {
 	// get smi output
 	stdout, err := execShell(ctx, cfg, cs, pod, container)
 	if err != nil {
@@ -29,27 +37,47 @@ func GetSerialNumbers(ctx context.Context, log *slog.Logger, cs *kubernetes.Clie
 	_ = b
 
 	// parse output
-	device, err := parseSMIDevice(b)
+	d, err := parseSMIDevice(b)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse nvidia-smi output: %w", err)
 	}
 
-	log.Debug("gpu info", "ns", pod.Namespace, "pod", pod.Name, "gpu_count", len(device.GPUs))
+	log.Debug("gpu info", "ns", pod.Namespace, "pod", pod.Name, "gpu_count", len(d.GPUs))
 
-	// in case of duplicate serial numbers
-	serialNumberMap := make(map[string]bool)
-	for _, gpu := range device.GPUs {
-		serialNumberMap[gpu.Serial] = true
+	// spoole through GPUs and group them by chassis serial number
+	unitMap := make(map[string]map[string]bool)
+	for _, gpu := range d.GPUs {
+		if unitMap[gpu.PlatformInfo.ChassisSerialNumber] == nil {
+			unitMap[gpu.PlatformInfo.ChassisSerialNumber] = make(map[string]bool)
+		}
+
+		if unitMap[gpu.PlatformInfo.ChassisSerialNumber][gpu.Serial] {
+			continue
+		}
+
+		unitMap[gpu.PlatformInfo.ChassisSerialNumber][gpu.Serial] = true
 	}
 
-	serialNumbers := make([]string, 0)
-	for serial := range serialNumberMap {
-		serialNumbers = append(serialNumbers, serial)
+	units := make([]*Serials, 0)
+
+	// convert map to slice
+	for chassis, gpus := range unitMap {
+		s := &Serials{
+			Chassis: chassis,
+			GPU:     make([]string, 0, len(gpus)),
+		}
+
+		for gpu := range gpus {
+			s.GPU = append(s.GPU, gpu)
+		}
+
+		sort.Strings(s.GPU)
+		units = append(units, s)
 	}
 
-	log.Debug("gpu serial numbers", "ns", pod.Namespace, "pod", pod.Name, "serial_numbers", len(serialNumbers))
+	log.Debug("gpu serial numbers", "ns", pod.Namespace, "pod", pod.Name, "serial_numbers", len(units))
 
-	return serialNumbers, nil
+	return units, nil
 }
 
 // execShell executes a shell command in a pod container using the Kubernetes exec API.
@@ -71,7 +99,7 @@ func execShell(ctx context.Context, cfg *rest.Config, cs *kubernetes.Clientset, 
 		}, scheme.ParameterCodec)
 
 	// Create the SPDY executor for streaming communication
-	executor, err := remotecommand.NewSPDYExecutor(cfg, "POST", req.URL())
+	executor, err := remotecommand.NewSPDYExecutor(cfg, http.MethodPost, req.URL())
 	if err != nil {
 		return "", fmt.Errorf("failed to create SPDY executor: %w", err)
 	}

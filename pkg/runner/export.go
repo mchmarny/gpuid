@@ -124,7 +124,7 @@ func GetExporterSimple(ctx context.Context, log *slog.Logger, exporterType strin
 }
 
 // Export handles exporting GPU serial numbers for a given pod using the configured exporter.
-func (e *Exporter) Export(ctx context.Context, log *slog.Logger, cluster string, pod *corev1.Pod, node string, serials []string) error {
+func (e *Exporter) Export(ctx context.Context, log *slog.Logger, cluster string, pod *corev1.Pod, node string, serials []*gpu.Serials) error {
 	if len(serials) == 0 {
 		return nil
 	}
@@ -155,33 +155,38 @@ func (e *Exporter) Export(ctx context.Context, log *slog.Logger, cluster string,
 		"pod", pod.Name,
 		"node", node,
 		"cluster", cluster,
-		"serial_numbers", strings.Join(serials, ","),
+		"serial_numbers", len(serials),
 		"exporter_type", e.Type)
 
 	// Transform serials into structured readings with proper provenance
 	records := make([]*gpu.SerialNumberReading, 0)
 
-	for _, sn := range serials {
-		if strings.TrimSpace(sn) == "" {
-			continue // Skip empty serial numbers
-		}
-
-		record := &gpu.SerialNumberReading{
-			Cluster: cluster,
-			Node:    pod.Spec.NodeName,
-			Machine: node,
-			Source:  fmt.Sprintf("%s/%s", pod.Namespace, pod.Name),
-			GPU:     sn,
-			Time:    time.Now().UTC(),
-		}
-
-		// Validate record before adding to batch
-		if err := record.Validate(); err != nil {
-			log.Warn("skipping invalid record", "error", err, "serial", sn)
+	for _, cn := range serials {
+		if cn == nil || cn.Chassis == "" {
+			log.Warn("skipping empty or nil chassis serial number", "chassis", cn)
 			continue
 		}
 
-		records = append(records, record)
+		// Create a record for each GPU serial number associated with the chassis
+		for _, sn := range cn.GPU {
+			record := &gpu.SerialNumberReading{
+				Cluster: cluster,
+				Node:    pod.Spec.NodeName,
+				Machine: node,
+				Source:  fmt.Sprintf("%s/%s", pod.Namespace, pod.Name),
+				Chassis: cn.Chassis,
+				GPU:     sn,
+				Time:    time.Now().UTC(),
+			}
+
+			// Validate record before adding to batch
+			if err := record.Validate(); err != nil {
+				log.Warn("skipping invalid record", "error", err, "serial", sn)
+				continue
+			}
+
+			records = append(records, record)
+		}
 	}
 
 	if len(records) == 0 {

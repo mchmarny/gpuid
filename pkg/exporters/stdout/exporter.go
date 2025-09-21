@@ -35,6 +35,7 @@ func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.S
 			"node", reading.Node,
 			"machine", reading.Machine,
 			"source", reading.Source,
+			"chassis", reading.Chassis,
 			"gpu", reading.GPU,
 			"time", reading.Time,
 		)
