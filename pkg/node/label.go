@@ -194,6 +194,11 @@ func calculateGPULabels(log *slog.Logger, serials []*gpu.Serials) map[string]str
 	})
 
 	chassisCount := 0
+	multipleChassis := len(sortedSerials) > 1
+
+	if multipleChassis {
+		log.Debug("multiple chassis detected, GPU labels will include chassis index", "chassis_count", len(sortedSerials))
+	}
 
 	// Generate labels
 	for i, s := range sortedSerials {
@@ -201,16 +206,19 @@ func calculateGPULabels(log *slog.Logger, serials []*gpu.Serials) map[string]str
 			continue
 		}
 
-		// increment chassis count only for non-nil entries
-		chassisCount++
-
 		// parse and sanitize chassis serial number
 		chassisSerial := sanitizeLabelValue(s.Chassis)
 
 		// set chassis label if serial number is present
 		if chassisSerial != notSetDefault {
-			chassisLabel := fmt.Sprintf("%s/%s-%d", labelNS, labelChassisPrefix, i)
+			chassisLabel := fmt.Sprintf("%s/%s", labelNS, labelChassisPrefix)
+			if multipleChassis {
+				chassisLabel = fmt.Sprintf("%s/%s-%d", labelNS, labelChassisPrefix, i)
+			}
 			labels[chassisLabel] = chassisSerial
+
+			// increment chassis count only for non-nil entries
+			chassisCount++
 		}
 
 		// sort GPU serials for predictable order
@@ -226,7 +234,7 @@ func calculateGPULabels(log *slog.Logger, serials []*gpu.Serials) map[string]str
 
 			// GPU label - no chassis prefix by default (h100)
 			gpuLabel := fmt.Sprintf("%s/%s-%d", labelNS, labelGPUPrefix, j)
-			if chassisSerial != notSetDefault {
+			if multipleChassis && chassisSerial != notSetDefault {
 				// if chassis has a serial number, then include its index in the GPU label
 				gpuLabel = fmt.Sprintf("%s/%s-%d-%s-%d", labelNS, labelChassisPrefix, i, labelGPUPrefix, j)
 			}
@@ -235,9 +243,11 @@ func calculateGPULabels(log *slog.Logger, serials []*gpu.Serials) map[string]str
 		}
 	}
 
-	// Chassis count
-	chassisCountLabel := fmt.Sprintf("%s/%s", labelNS, labelChassisCount)
-	labels[chassisCountLabel] = fmt.Sprintf("%d", chassisCount)
+	// Chassis count, only if there is at least one chassis with a serial number
+	if chassisCount > 0 {
+		chassisCountLabel := fmt.Sprintf("%s/%s", labelNS, labelChassisCount)
+		labels[chassisCountLabel] = fmt.Sprintf("%d", chassisCount)
+	}
 
 	return labels
 }

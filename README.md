@@ -319,7 +319,7 @@ Navigate to https://github.com/mchmarny/gpuid/attestations and pick the version 
 > Update the image digest to the version you end up using.
 
 ```shell
-export IMAGE=ghcr.io/mchmarny/gpuid:v0.7.2@sha256:696de52c4e63ad33428a1585ee69f19e4325203e10743fb20c410ad75c6fa253
+export IMAGE=ghcr.io/mchmarny/gpuid:v0.7.3@sha256:478816ef4afceb46c669a725d21471f5f71350f134d6df94707b40b171fd12ea
 ```
 
 #### GitHub CLI

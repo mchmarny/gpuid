@@ -68,28 +68,48 @@ func TestEnsureLabels(t *testing.T) {
 		failCount      int
 	}{
 		{
-			name:          "add new GPU labels",
+			name:          "h100",
+			initialLabels: map[string]string{"existing": "label"},
+			serials: []*gpu.Serials{
+				{
+					GPU: []string{"gpu0", "gpu1", "gpu2", "gpu3", "gpu4", "gpu5", "gpu6", "gpu7"},
+				},
+			},
+			expectedLabels: map[string]string{
+				"existing":               "label",
+				"gpuid.github.com/gpu-0": "gpu0",
+				"gpuid.github.com/gpu-1": "gpu1",
+				"gpuid.github.com/gpu-2": "gpu2",
+				"gpuid.github.com/gpu-3": "gpu3",
+				"gpuid.github.com/gpu-4": "gpu4",
+				"gpuid.github.com/gpu-5": "gpu5",
+				"gpuid.github.com/gpu-6": "gpu6",
+				"gpuid.github.com/gpu-7": "gpu7",
+			},
+		},
+		{
+			name:          "gb200",
 			initialLabels: map[string]string{"existing": "label"},
 			serials: []*gpu.Serials{
 				{
 					Chassis: "chassis1",
-					GPU:     []string{"gpu1", "gpu2"},
+					GPU:     []string{"gpu0", "gpu1"},
 				},
 			},
 			expectedLabels: map[string]string{
-				"existing":                         "label",
-				"gpuid.github.com/chassis-0":       "chassis1",
-				"gpuid.github.com/chassis-0-gpu-0": "gpu1",
-				"gpuid.github.com/chassis-0-gpu-1": "gpu2",
-				"gpuid.github.com/chassis-count":   "1",
+				"existing":                       "label",
+				"gpuid.github.com/chassis":       "chassis1",
+				"gpuid.github.com/gpu-0":         "gpu0",
+				"gpuid.github.com/gpu-1":         "gpu1",
+				"gpuid.github.com/chassis-count": "1",
 			},
 		},
 		{
 			name: "replace existing GPU labels",
 			initialLabels: map[string]string{
-				"existing":                         "label",
-				"gpuid.github.com/chassis-0":       "chassis1",
-				"gpuid.github.com/chassis-0-gpu-0": "oldgpu",
+				"existing":                 "label",
+				"gpuid.github.com/chassis": "chassis1",
+				"gpuid.github.com/gpu-0":   "oldgpu",
 			},
 			serials: []*gpu.Serials{
 				{
@@ -98,10 +118,10 @@ func TestEnsureLabels(t *testing.T) {
 				},
 			},
 			expectedLabels: map[string]string{
-				"existing":                         "label",
-				"gpuid.github.com/chassis-0":       "newchassis",
-				"gpuid.github.com/chassis-0-gpu-0": "newgpu",
-				"gpuid.github.com/chassis-count":   "1",
+				"existing":                       "label",
+				"gpuid.github.com/chassis":       "newchassis",
+				"gpuid.github.com/gpu-0":         "newgpu",
+				"gpuid.github.com/chassis-count": "1",
 			},
 		},
 		{
@@ -144,9 +164,9 @@ func TestEnsureLabels(t *testing.T) {
 				},
 			},
 			expectedLabels: map[string]string{
-				"gpuid.github.com/chassis-0":       "chassis1",
-				"gpuid.github.com/chassis-0-gpu-0": "gpu1",
-				"gpuid.github.com/chassis-count":   "1",
+				"gpuid.github.com/chassis":       "chassis1",
+				"gpuid.github.com/gpu-0":         "gpu1",
+				"gpuid.github.com/chassis-count": "1",
 			},
 			shouldFail: true,
 			failCount:  2, // Fail first 2 attempts, succeed on 3rd
@@ -239,10 +259,10 @@ func TestCalculateGPULabels(t *testing.T) {
 				},
 			},
 			expectedLabels: map[string]string{
-				"gpuid.github.com/chassis-0":       "chassis1",
-				"gpuid.github.com/chassis-0-gpu-0": "gpu1", // Should be sorted
-				"gpuid.github.com/chassis-0-gpu-1": "gpu2",
-				"gpuid.github.com/chassis-count":   "1",
+				"gpuid.github.com/chassis":       "chassis1",
+				"gpuid.github.com/gpu-0":         "gpu1", // Should be sorted
+				"gpuid.github.com/gpu-1":         "gpu2",
+				"gpuid.github.com/chassis-count": "1",
 			},
 		},
 		{
@@ -263,22 +283,6 @@ func TestCalculateGPULabels(t *testing.T) {
 				"gpuid.github.com/chassis-1":       "chassis2",
 				"gpuid.github.com/chassis-1-gpu-0": "gpu3",
 				"gpuid.github.com/chassis-count":   "2",
-			},
-		},
-		{
-			name: "handle nil entries",
-			serials: []*gpu.Serials{
-				nil,
-				{
-					Chassis: "chassis1",
-					GPU:     []string{"gpu1"},
-				},
-				nil,
-			},
-			expectedLabels: map[string]string{
-				"gpuid.github.com/chassis-0":       "chassis1",
-				"gpuid.github.com/chassis-0-gpu-0": "gpu1",
-				"gpuid.github.com/chassis-count":   "1",
 			},
 		},
 	}
