@@ -16,7 +16,7 @@ rules:
     verbs: ["get"]
   - apiGroups: [""]
     resources: ["nodes"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list", "watch", "update"]
 
 ---
 # Bind cluster-wide role to gpuid SA in the gpuid namespace

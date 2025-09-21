@@ -39,6 +39,9 @@ kubectl create cm smi-faker-data -n gpu-operator \
 # Deploy fake nvidia-smi on all nodes with nodeGroup=gpu-worker label
 kubectl apply -f deployments/smi-faker
 
+# Wiat for all faker pods to be running
+kubectl -n gpu-operator wait --for=condition=Ready pod -l app=nvidia-device-plugin-daemonset --timeout=120s
+
 # Apply dev deployment
 kubectl apply -k deployments/gpuid/overlays/stdout
 
@@ -61,6 +64,8 @@ SUCCESS_COUNT=$(kubectl -n gpuid logs -l app=gpuid --tail=-1 \
 if [[ "$SUCCESS_COUNT" -lt 2 ]]; then
   err "Expected at least 2 successful export, found $SUCCESS_COUNT"
 fi
+
+# Verify node labels 
 
 # Check SLSA provenance
 msg "Verifying SLSA provenance..."

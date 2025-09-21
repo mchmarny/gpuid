@@ -9,6 +9,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -65,6 +66,12 @@ func EnsureLabels(ctx context.Context, log *slog.Logger, labeler Updater, nodeNa
 	}, func() (bool, error) {
 		success, err := attemptLabelUpdate(ctx, log, labeler, nodeName, desiredLabels)
 		if err != nil {
+			// Don't retry permission errors - they won't resolve with retries
+			if errors.IsForbidden(err) {
+				log.Error("insufficient permissions to update node labels - check RBAC configuration",
+					"node", nodeName, "error", err)
+				return false, err // Return the error to stop retrying
+			}
 			log.Warn("failed to update node labels, retrying", "node", nodeName, "error", err)
 			return false, nil
 		}

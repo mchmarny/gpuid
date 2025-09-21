@@ -21,6 +21,8 @@ var (
 	// Metrics for monitoring command execution outcomes.
 	counterSuccess = counter.New("gpuid_export_success_total", "Total number of successful export executions", "node", "pod")
 	counterErr     = counter.New("gpuid_export_failure_total", "Total number of failed export executions", "node", "pod")
+
+	nodeLabelUpdateTimeout = 60 * time.Second
 )
 
 // do processes items from the work queue in a loop until the context is canceled.
@@ -157,7 +159,9 @@ func processPod(
 
 	// Update gpu and chassis labels on the pod underlining node
 	labeler := node.NewLabelUpdater(cs)
-	if err = node.EnsureLabels(pctx, log, labeler, pod.Spec.NodeName, serials); err != nil {
+	labelCtx, labelCancel := context.WithTimeout(ctx, nodeLabelUpdateTimeout)
+	defer labelCancel()
+	if err = node.EnsureLabels(labelCtx, log, labeler, pod.Spec.NodeName, serials); err != nil {
 		counterErr.Increment(pod.Spec.NodeName, pod.Name)
 		log.Error("failed to ensure node labels",
 			"pod", pod.Name,
