@@ -22,12 +22,31 @@ GPU accelerated Kubernetes nodes in operator managed services (e.g. EKS in AWS o
 
 ## Features
 
-- Node labels with the GPU and chassis serial numbers
 - HTTP, PostgreSQL DB, and S3 exporters
 - Connection pooling, retry logic, health checks
 - Structured logging with contextual information
 - Prometheus-compatible observability metrics for monitoring
 - SLSA build attestation and Sigstore attestation validation
+- Node labels with the GPU and chassis serial numbers
+  
+```shell
+# H100 (no chassis): 
+gpuid.github.com/gpu-0=1652823054567
+gpuid.github.com/gpu-1=1652823055642
+gpuid.github.com/gpu-2=1652823055647
+gpuid.github.com/gpu-3=1652823055931
+gpuid.github.com/gpu-4=1652923033989
+gpuid.github.com/gpu-5=1652923034028
+gpuid.github.com/gpu-6=1652923034291
+gpuid.github.com/gpu-7=1653023018213
+
+# GB200:
+gpuid.github.com/chassis=1821325191344
+gpuid.github.com/gpu-0=1761025346025
+gpuid.github.com/gpu-1=1761125340419
+```
+
+> GB200 nodes have 4 GPUs but only 2 unique serial numbers. These GPUs come in dual-die packaging where 2 GPU are stitched together with NVLink-C2C on the same module.
 
 ## Available Exporters
 
