@@ -211,6 +211,14 @@ kubectl -n gpuid logs -l app=gpuid --tail=-1 \
   | jq -r 'select(.level == "ERROR") | "\(.time) \(.msg) \(.error)"'
 ```
 
+Or only the serial reading events: 
+
+```shell
+kubectl -n gpuid logs -l app=gpuid --tail=-1 \
+  | jq -r 'select(.msg == "gpu serial number reading") 
+  | "\(.chassis) \(.node) \(.machine) \(.gpu)"'
+```
+
 ### Cleanup
 
 ```shell
