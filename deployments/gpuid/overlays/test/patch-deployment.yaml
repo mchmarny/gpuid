@@ -9,6 +9,7 @@ spec:
     spec:
       containers:
         - name: gpuid
+          image: ghcr.io/mchmarny/gpuid:latest
           env:
             - name: CLUSTER_NAME
               value: 'prod'
@@ -16,7 +17,3 @@ spec:
               value: 'gpu-operator'
             - name: LABEL_SELECTOR
               value: 'app=nvidia-device-plugin-daemonset'
-      tolerations:
-        - key: dedicated
-          operator: Equal
-          value: system-workload
