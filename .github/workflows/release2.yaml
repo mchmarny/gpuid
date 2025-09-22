@@ -38,7 +38,7 @@ jobs:
       attestations: write
     steps:
 
-      # build the image
+    # build the image
     - uses: mchmarny/common/go-build@994d32fc6dcff3e6006a59db9d20b9e201423cb4  # v0.2.6
       id: build
       with:
@@ -56,10 +56,10 @@ jobs:
         kind-version: ${{ env.KIND_VERSION }}
         k8s-version: ${{ env.K8S_VERSION }}
         kind-worker-count: "${{ env.WORKER_NODE_COUNT }}"
-    
+
     # runt integration tests and commit the updated deployment file
     - name: Run integration and commit updated deployment
-      shell: bash  
+      shell: bash
       run: |
         tools/image ${{ steps.build.outputs.image-uri }} ${{ env.DEPLOYMENT_PATCH_FILE }}
         tools/e2e
