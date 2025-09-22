@@ -1,6 +1,6 @@
 name: release2
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       release-version:
         required: true
