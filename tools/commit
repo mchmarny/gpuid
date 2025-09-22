@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Dir setup
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(cd "$DIR/.." && pwd)"
+. "${DIR}/common"
+ROOT=$(dirname "${DIR}")
 
 # Changes to the repository root
 CHANGED_FILE=${1:-deployments/gpuid/base/deployment.yaml}
