@@ -219,6 +219,26 @@ kubectl -n gpuid logs -l app=gpuid --tail=-1 \
   | "\(.chassis) \(.node) \(.machine) \(.gpu)"'
 ```
 
+Once deployed, you can use these new labels: 
+
+```shell
+kubectl get nodes -l nodeGroup=customer-gpu -o json \
+| jq -r '
+    [ .items[]
+      | {chassis: (.metadata.labels["gpuid.github.com/chassis"] // "na")}
+    ]
+    | group_by(.chassis)
+    | map({(.[0].chassis): length})
+    | add
+'
+{
+  "1821025191506": 9,
+  "1821225190819": 7,
+  "1821225192095": 9,
+  "1821325191344": 9
+}
+```
+
 ### Cleanup
 
 ```shell
