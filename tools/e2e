@@ -43,7 +43,7 @@ kubectl apply -f deployments/smi-faker
 kubectl -n gpu-operator wait --for=condition=Ready pod -l app=nvidia-device-plugin-daemonset --timeout=120s
 
 # Apply test deployment
-kubectl apply -k deployments/gpuid/overlays/test
+kubectl apply -k deployments/gpuid/overlays/stdout
 
 # Wait for the deployment to be available
 kubectl wait --for=condition=available --timeout=60s deployment/gpuid -n gpuid 
