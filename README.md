@@ -5,7 +5,7 @@
 ![Go Report Card](https://goreportcard.com/badge/github.com/mchmarny/gpuid)
 [![codecov](https://codecov.io/gh/mchmarny/gpuid/branch/main/graph/badge.svg)](https://codecov.io/gh/mchmarny/gpuid)
 
-# GPU Serial Number Exporter (gpuid)
+# GPU and Chassis Serial Number Exporter (gpuid)
 
 Monitor pods on GPU-accelerated node in Kubernetes cluster and update nodes with chassis and GPU labels serial numbers. Supports serial number export to various state backends for tracking, monitoring, and analyses.
 
@@ -22,12 +22,31 @@ GPU accelerated Kubernetes nodes in operator managed services (e.g. EKS in AWS o
 
 ## Features
 
-- Node labels with the GPU and chassis serial numbers
 - HTTP, PostgreSQL DB, and S3 exporters
 - Connection pooling, retry logic, health checks
 - Structured logging with contextual information
 - Prometheus-compatible observability metrics for monitoring
 - SLSA build attestation and Sigstore attestation validation
+- Node labels with the GPU and chassis serial numbers
+  
+```shell
+# H100 (no chassis): 
+gpuid.github.com/gpu-0=1652823054567
+gpuid.github.com/gpu-1=1652823055642
+gpuid.github.com/gpu-2=1652823055647
+gpuid.github.com/gpu-3=1652823055931
+gpuid.github.com/gpu-4=1652923033989
+gpuid.github.com/gpu-5=1652923034028
+gpuid.github.com/gpu-6=1652923034291
+gpuid.github.com/gpu-7=1653023018213
+
+# GB200:
+gpuid.github.com/chassis=1821325191344
+gpuid.github.com/gpu-0=1761025346025
+gpuid.github.com/gpu-1=1761125340419
+```
+
+> GB200 nodes have 4 GPUs but only 2 unique serial numbers. These GPUs come in dual-die packaging where 2 GPU are stitched together with NVLink-C2C on the same module.
 
 ## Available Exporters
 
@@ -190,6 +209,34 @@ Since these logs are in JSON, you can filter them with `jq` for specific informa
 ```shell
 kubectl -n gpuid logs -l app=gpuid --tail=-1 \
   | jq -r 'select(.level == "ERROR") | "\(.time) \(.msg) \(.error)"'
+```
+
+Or only the serial reading events: 
+
+```shell
+kubectl -n gpuid logs -l app=gpuid --tail=-1 \
+  | jq -r 'select(.msg == "gpu serial number reading") 
+  | "\(.chassis) \(.node) \(.machine) \(.gpu)"'
+```
+
+Once deployed, you can use these new labels: 
+
+```shell
+kubectl get nodes -l nodeGroup=customer-gpu -o json \
+| jq -r '
+    [ .items[]
+      | {chassis: (.metadata.labels["gpuid.github.com/chassis"] // "na")}
+    ]
+    | group_by(.chassis)
+    | map({(.[0].chassis): length})
+    | add
+'
+{
+  "1821025191506": 9,
+  "1821225190819": 7,
+  "1821225192095": 9,
+  "1821325191344": 9
+}
 ```
 
 ### Cleanup
