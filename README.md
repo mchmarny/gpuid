@@ -5,7 +5,7 @@
 ![Go Report Card](https://goreportcard.com/badge/github.com/mchmarny/gpuid)
 [![codecov](https://codecov.io/gh/mchmarny/gpuid/branch/main/graph/badge.svg)](https://codecov.io/gh/mchmarny/gpuid)
 
-# GPU Serial Number Exporter (gpuid)
+# GPU and Chassis Serial Number Exporter (gpuid)
 
 Monitor pods on GPU-accelerated node in Kubernetes cluster and update nodes with chassis and GPU labels serial numbers. Supports serial number export to various state backends for tracking, monitoring, and analyses.
 
