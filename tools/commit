@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$DIR/.." && pwd)"
+
+# Changes to the repository root
+CHANGED_FILE=${1:-deployments/gpuid/base/deployment.yaml}
+USER_ID="${2:-}"
+NEW_TAG="${3:-}"
+
+# Check if required tools are installed
+has_tools git
+
+# Commit and push the updated file
+msg "Committing and pushing changes to $CHANGED_FILE"
+git config user.name "github-actions[bot]"
+git config user.email "${USER_ID}+github-actions[bot]@users.noreply.github.com"
+git add "$CHANGED_FILE"
+git commit -m "chore: image version bump"
+git push origin main
+
+# Check if new version tag already exists locally
+if git tag --list | grep -q "^${NEW_TAG}$"; then
+    err "Version tag '${NEW_TAG}' already exists locally. Use a different bump type or manually set version."
+fi
+  
+# Check if new version tag already exists on remote
+if git ls-remote --tags origin | grep -q "refs/tags/${NEW_TAG}$"; then
+    err "Version tag '${NEW_TAG}' already exists on remote. Use a different bump type or manually set version."
+fi
+  
+msg "Creating and pushing new git tag: $NEW_TAG"
+git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
+git push origin HEAD
+git push origin "$NEW_TAG"
