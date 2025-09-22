@@ -363,10 +363,10 @@ Navigate to https://github.com/mchmarny/gpuid/attestations and pick the version 
 
 ### Using CLIs
 
-> Update the image digest to the version you end up using.
+> Update the below image with the digest to the version you end up using.
 
 ```shell
-export IMAGE=ghcr.io/mchmarny/gpuid:v0.7.4@sha256:554455d884b2dced4135c9611b9a5207e3cd0c330f6d7ce339f6eb9dfdfe2f96
+export IMAGE=ghcr.io/mchmarny/gpuid:latest
 ```
 
 #### GitHub CLI
