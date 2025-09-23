@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${DIR}/common"
+ROOT=$(dirname "${DIR}")
+
+# validate arguments
+RELEASE_VERSION=$1
+
+if [[ -z "$RELEASE_VERSION" ]]; then
+  err "Error: RELEASE_VERSION is required."
+fi
+
+msg "Creating release assets for version $RELEASE_VERSION..."
+
+# create new dist directory
+rm -rf dist
+mkdir -p dist
+
+# create release assets
+tar -czf "dist/gpuid-${RELEASE_VERSION}.tar.gz" -C deployments gpuid
+tar -czf "dist/policy-${RELEASE_VERSION}.tar.gz" -C deployments policy
+(cd deployments && zip -r "../dist/gpuid-${RELEASE_VERSION}.zip" gpuid)
+(cd deployments && zip -r "../dist/policy-${RELEASE_VERSION}.zip" policy)
