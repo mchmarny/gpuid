@@ -1,5 +1,5 @@
-![OnPush](https://github.com/mchmarny/gpuid/actions/workflows/main.yaml/badge.svg)
-![OnTag](https://github.com/mchmarny/gpuid/actions/workflows/release.yaml/badge.svg)
+[![main](https://github.com/mchmarny/gpuid/actions/workflows/main.yaml/badge.svg)](https://github.com/mchmarny/gpuid/actions/workflows/main.yaml)
+[![release](https://github.com/mchmarny/gpuid/actions/workflows/release.yaml/badge.svg)](https://github.com/mchmarny/gpuid/actions/workflows/release.yaml)
 ![Issues](https://img.shields.io/github/issues/mchmarny/gpuid)
 ![PRs](https://img.shields.io/github/issues-pr/mchmarny/gpuid)
 ![Go Report Card](https://goreportcard.com/badge/github.com/mchmarny/gpuid)
