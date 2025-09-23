@@ -62,6 +62,6 @@ jobs:
     - name: Set up GitHub CLI
       run: echo "${{ github.token }}" | gh auth login --with-token
     - name: Create release assets
-      run: tools/assets
+      run: tools/assets ${{ github.ref_name }}
     - name: Create release with notes
       run: gh release create ${{ github.ref_name }} --generate-notes dist/*.tar.gz dist/*.zip
