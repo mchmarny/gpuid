@@ -28,7 +28,7 @@ jobs:
       source-tag: ${{ github.ref_name }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       security-events: write
       id-token: write
       packages: write
