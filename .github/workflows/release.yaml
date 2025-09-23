@@ -18,7 +18,7 @@ jobs:
       K8S_VERSION: '1.33.x'
       GO_LINTER_VERSION: 'v2.4.0'
       IMAGE_PLATFORMS: 'linux/amd64,linux/arm64'
-      DEPLOYMENT_PATCH_FILE: deployments/gpuid/overlays/stdout/patch-deployment.yaml
+      DEPLOYMENT_PATCH_FILE: deployments/gpuid/base/deployment.yaml
       WORKER_NODE_COUNT: '2'
     outputs:
       image-uri: ${{ steps.build.outputs.image-uri }}
@@ -53,5 +53,15 @@ jobs:
         kind-version: ${{ env.KIND_VERSION }}
         k8s-version: ${{ env.K8S_VERSION }}
         kind-worker-count: "${{ env.WORKER_NODE_COUNT }}"
-    - run: tools/image ${{ steps.build.outputs.image-uri }} ${{ env.DEPLOYMENT_PATCH_FILE }}
-    - run: tools/e2e
+    - name: Update deployment with the new image
+      run: tools/image ${{ steps.build.outputs.image-uri }} ${{ env.DEPLOYMENT_PATCH_FILE }}
+    - name: Execute end-to-end tests
+      run: tools/e2e
+
+    # create a release
+    - name: Set up GitHub CLI
+      run: echo "${{ github.token }}" | gh auth login --with-token
+    - name: Create release assets
+      run: tools/assets
+    - name: Create release with notes
+      run: gh release create ${{ github.ref_name }} --generate-notes dist/*.tar.gz dist/*.zip
