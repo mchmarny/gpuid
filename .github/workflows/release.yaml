@@ -58,7 +58,7 @@ jobs:
     - name: Execute end-to-end tests
       run: tools/e2e
 
-    # create a release 
+    # create a release
     - name: Set up GitHub CLI
       run: echo "${{ github.token }}" | gh auth login --with-token
     - name: Create release assets
