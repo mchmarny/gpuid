@@ -169,21 +169,25 @@ env:
 
 ## Usage
 
+### Download 
+
+Download and expand either the zip or tar version of the artifacts `gpuid` and `policy` artifacts from https://github.com/mchmarny/gpuid/releases/latest.
+
 ### Deployment
 
 1. **Configure the deployment** by updating the specific overlay that corresponds to your backend type:
 
-* http - [deployments/gpuid/overlays/http/patch-deployment.yaml](deployments/gpuid/overlays/http/patch-deployment.yaml)   
-* postgres - [deployments/gpuid/overlays/postgres/patch-deployment.yaml](deployments/gpuid/overlays/postgres/patch-deployment.yaml)
-* s3 - [deployments/gpuid/overlays/s3/patch-deployment.yaml](deployments/gpuid/overlays/s3/patch-deployment.yaml)
-* stdout - [deployments/gpuid/overlays/stdout/patch-deployment.yaml](deployments/gpuid/overlays/stdout/patch-deployment.yaml)
+* `stdout` (default) - [deployments/gpuid/overlays/stdout/patch-deployment.yaml](deployments/gpuid/overlays/stdout/patch-deployment.yaml)
+* `http` - [deployments/gpuid/overlays/http/patch-deployment.yaml](deployments/gpuid/overlays/http/patch-deployment.yaml)   
+* `postgres` - [deployments/gpuid/overlays/postgres/patch-deployment.yaml](deployments/gpuid/overlays/postgres/patch-deployment.yaml)
+* `s3` - [deployments/gpuid/overlays/s3/patch-deployment.yaml](deployments/gpuid/overlays/s3/patch-deployment.yaml)
 
 1. **Apply the configuration**
 
-For example, to deploy with S3 backend:
+> Substitute for the desired backend.
 
 ```shell
-kubectl apply -k deployments/gpuid/overlays/s3
+kubectl apply -k deployments/gpuid/overlays/stdout
 ```
 
 1. **Verify deployment**
