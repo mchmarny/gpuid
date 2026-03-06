@@ -9,7 +9,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 // Info holds parsed information about a Kubernetes node's cloud provider and instance identifier.
@@ -22,8 +21,8 @@ type Info struct {
 // GetNodeProviderID retrieves and parses the provider ID of a given Kubernetes node.
 // It returns a Info struct containing the cloud provider, instance identifier, and raw provider ID.
 // Supports AWS, GCP, Azure and BareMetal. Returns an error if node cannot be fetched or if provider is unrecognized.
-func GetNodeProviderID(ctx context.Context, log *slog.Logger, cs *kubernetes.Clientset, cfg *rest.Config, node string) (*Info, error) {
-	n, err := Get(ctx, log, cs, cfg, node)
+func GetNodeProviderID(ctx context.Context, log *slog.Logger, cs *kubernetes.Clientset, node string) (*Info, error) {
+	n, err := Get(ctx, log, cs, node)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get node: %w", err)
 	}
@@ -78,17 +77,13 @@ func parseNodeInfo(log *slog.Logger, providerID string) (*Info, error) {
 
 // Get fetches the Kubernetes node object by name using the provided clientset and config.
 // It returns an error if the node name is empty, clientset or config is nil, or if the node cannot be fetched.
-func Get(ctx context.Context, log *slog.Logger, cs *kubernetes.Clientset, cfg *rest.Config, node string) (*corev1.Node, error) {
+func Get(ctx context.Context, log *slog.Logger, cs *kubernetes.Clientset, node string) (*corev1.Node, error) {
 	if strings.TrimSpace(node) == "" {
 		return nil, fmt.Errorf("node name is required")
 	}
 
 	if cs == nil {
 		return nil, fmt.Errorf("kubernetes clientset is nil")
-	}
-
-	if cfg == nil {
-		return nil, fmt.Errorf("kubernetes rest config is nil")
 	}
 
 	if log == nil {

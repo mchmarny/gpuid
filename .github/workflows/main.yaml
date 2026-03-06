@@ -14,20 +14,37 @@ permissions:
 jobs:
 
   test:
-    env:
-      GO_VERSION: "1.25.0"
-      ERR_VULNERABILITY_SEV: "CRITICAL,HIGH,MEDIUM"
-      LINTER_VERSION: "v2.4.0"
-      LINTER_GO_CONFIG_PATH: ".golangci.yaml"
-      LINTER_YAML_CONFIG_PATH: ".yamllint"
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: write
       id-token: write
     steps:
-    - uses: mchmarny/common/go-test@994d32fc6dcff3e6006a59db9d20b9e201423cb4  # v0.2.6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+    - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00  # v6.0.0
       with:
-        go-version: ${{ env.GO_VERSION }}
-        scan-severity: ${{ env.ERR_VULNERABILITY_SEV }}
-        linter-version: ${{ env.LINTER_VERSION }}
+        go-version-file: go.mod
+        cache: true
+
+    - name: Tidy
+      run: go mod tidy
+
+    - name: Test
+      run: |
+        go test -count=1 -race -covermode=atomic -coverprofile=coverage.out ./...
+        go tool cover -func=coverage.out
+
+    - name: Coverage
+      uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7  # v5.5.1
+      with:
+        fail_ci_if_error: true
+        use_oidc: true
+
+    - name: Lint Go
+      uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9  # v8.0.0
+      with:
+        version: v2.4.0
+
+    - name: Lint YAML
+      uses: karancode/yamllint-github-action@4052d365f09b8d34eb552c363d1141fd60e2aeb2  # v3.0.0
+      with:
+        yamllint_config_filepath: .yamllint

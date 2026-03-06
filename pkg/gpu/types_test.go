@@ -14,6 +14,7 @@ func TestSerialNumberReading_Slice(t *testing.T) {
 		Node:    "test-node",
 		Machine: "test-machine",
 		Source:  "test-namespace/test-pod",
+		Chassis: "chassis-123",
 		GPU:     "GPU-12345",
 		Time:    testTime,
 	}
@@ -23,6 +24,7 @@ func TestSerialNumberReading_Slice(t *testing.T) {
 		"test-node",
 		"test-machine",
 		"test-namespace/test-pod",
+		"chassis-123",
 		"GPU-12345",
 		testTime.Format(time.RFC3339),
 	}
@@ -161,8 +163,8 @@ func TestSerialNumberReading_SliceConsistency(t *testing.T) {
 		t.Error("Slice() should produce consistent output")
 	}
 
-	if len(slice1) != 6 {
-		t.Errorf("Slice() should return 6 elements, got %d", len(slice1))
+	if len(slice1) != 7 {
+		t.Errorf("Slice() should return 7 elements, got %d", len(slice1))
 	}
 }
 
@@ -194,7 +196,7 @@ func TestSerialNumberReading_TimeFormatting(t *testing.T) {
 			}
 
 			slice := reading.Slice()
-			timeStr := slice[5] // Time is the last element
+			timeStr := slice[6] // Time is the last element
 
 			// Parse the time back to ensure it's valid RFC3339
 			_, err := time.Parse(time.RFC3339, timeStr)

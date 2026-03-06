@@ -1,17 +1,19 @@
 # =======================================================================================
-# Project configuration
+# Project configuration (.settings.yaml is the single source of truth for versions)
 # =======================================================================================
 
 APP_NAME           := gpuid
 BRANCH             := $(shell git rev-parse --abbrev-ref HEAD)
 COMMIT             := $(shell git rev-parse HEAD)
+VERSION            ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
 CONFIG_FILE        ?= kind.yaml
 GO_VERSION	       := $(shell go version | awk '{print $$3}' | sed 's/go//')
 GOLINT_VERSION     := $(shell golangci-lint --version | awk '{print $$4}' | sed 's/golangci-lint version //')
-GORELEASER_VERSION := $(shell goreleaser --version | grep GitVersion | awk '{print $$2}')
 KO_VERSION         := $(shell ko version)
 KUBECTL_VERSION    := $(shell kubectl version --client | grep Client | awk '{print $$3}' | sed 's/v//')
 YAML_FILES         := $(shell find . -type f \( -iname "*.yml" -o -iname "*.yaml" \) ! -path "./example/*")
+COVERAGE_THRESHOLD ?= $(shell yq -r '.quality.coverage_threshold' .settings.yaml 2>/dev/null)
+LINT_TIMEOUT       ?= $(shell yq -r '.quality.lint_timeout' .settings.yaml 2>/dev/null)
 
 # =======================================================================================
 # Default target
@@ -22,10 +24,10 @@ all: info
 .PHONY: info
 info: ## Prints the current project info
 	@echo "app:            $(APP_NAME)"
+	@echo "version:        $(VERSION)"
 	@echo "branch:         $(BRANCH)"
 	@echo "commit:         $(COMMIT)"
 	@echo "go:             $(GO_VERSION)"
-	@echo "goreleaser:     $(GORELEASER_VERSION)"
 	@echo "ko:             $(KO_VERSION)"
 	@echo "kubectl:        $(KUBECTL_VERSION)"
 	@echo "linter:         $(GOLINT_VERSION)"
@@ -135,11 +137,6 @@ bump-minor: ## Bumps minor version (1.2.3 → 1.3.0)
 .PHONY: bump-patch
 bump-patch: ## Bumps patch version (1.2.3 → 1.2.4)
 	tools/bump patch
-
-.PHONY: release
-release: ## Runs the release process
-	@set -e; \
-	goreleaser release --clean --config .goreleaser.yaml --fail-fast --timeout 10m0s
 
 # =======================================================================================
 # Integration testing with KinD

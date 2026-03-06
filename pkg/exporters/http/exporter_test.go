@@ -68,10 +68,8 @@ func TestExporter_Configuration(t *testing.T) {
 				if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
 					t.Errorf("Expected error message to contain %q, got %q", tt.errorMsg, err.Error())
 				}
-			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
+			} else if err != nil {
+				t.Errorf("Unexpected error: %v", err)
 			}
 		})
 	}

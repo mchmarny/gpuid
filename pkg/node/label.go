@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"regexp"
 	"sort"
 	"strings"
@@ -35,7 +36,12 @@ const (
 
 // labelValueRegex matches valid Kubernetes label values
 // Valid regex: (([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?
-var labelValueRegex = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9\-_.]*[A-Za-z0-9])?$`)
+var (
+	labelValueRegex   = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9\-_.]*[A-Za-z0-9])?$`)
+	invalidCharsRegex = regexp.MustCompile(`[^A-Za-z0-9\-_.]`)
+	leadingJunkRegex  = regexp.MustCompile(`^[^A-Za-z0-9]+`)
+	trailingJunkRegex = regexp.MustCompile(`[^A-Za-z0-9]+$`)
+)
 
 // sanitizeLabelValue converts any string into a valid Kubernetes label value
 // Invalid characters are replaced with underscores, and N/A is converted to "unknown"
@@ -50,12 +56,12 @@ func sanitizeLabelValue(value string) string {
 	}
 
 	// Replace invalid characters with hyphens
-	sanitized := regexp.MustCompile(`[^A-Za-z0-9\-_.]`).ReplaceAllString(value, "-")
+	sanitized := invalidCharsRegex.ReplaceAllString(value, "-")
 
 	// Ensure it starts and ends with alphanumeric character
 	// Trim leading/trailing non-alphanumeric characters
-	sanitized = regexp.MustCompile(`^[^A-Za-z0-9]+`).ReplaceAllString(sanitized, "")
-	sanitized = regexp.MustCompile(`[^A-Za-z0-9]+$`).ReplaceAllString(sanitized, "")
+	sanitized = leadingJunkRegex.ReplaceAllString(sanitized, "")
+	sanitized = trailingJunkRegex.ReplaceAllString(sanitized, "")
 
 	// If empty after sanitization, use a default
 	if sanitized == "" {
@@ -149,10 +155,8 @@ func attemptLabelUpdate(ctx context.Context, log *slog.Logger, labeler Updater, 
 	}
 
 	// Create a copy of labels to avoid mutating the original
-	updatedLabels := make(map[string]string)
-	for k, v := range currentLabels {
-		updatedLabels[k] = v
-	}
+	updatedLabels := make(map[string]string, len(currentLabels))
+	maps.Copy(updatedLabels, currentLabels)
 
 	// Clear existing GPU labels and apply new ones
 	clearLabels(updatedLabels)
@@ -282,9 +286,7 @@ func clearLabels(labels map[string]string) {
 	}
 }
 
-// applyGPULabels adds the desired GPU labels
+// applyLabels adds the desired GPU labels
 func applyLabels(labels, desiredLabels map[string]string) {
-	for k, v := range desiredLabels {
-		labels[k] = v
-	}
+	maps.Copy(labels, desiredLabels)
 }

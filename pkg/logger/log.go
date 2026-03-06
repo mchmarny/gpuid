@@ -35,7 +35,7 @@ func NewProductionLogger(cfg Config) *slog.Logger {
 		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
 			if a.Key == slog.TimeKey {
 				// RFC3339 with milliseconds for humans + machines
-				return slog.String(slog.TimeKey, time.Now().Format(time.RFC3339Nano))
+				return slog.String(slog.TimeKey, a.Value.Time().Format(time.RFC3339Nano))
 			}
 			return a
 		},

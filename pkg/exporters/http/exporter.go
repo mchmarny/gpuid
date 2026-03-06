@@ -133,13 +133,11 @@ func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.S
 }
 
 // Close performs cleanup of HTTP client resources.
-func (e *Exporter) Close(_ context.Context) error {
+func (e *Exporter) Close(_ context.Context) error { //nolint:unparam // interface implementation
 	if e == nil || e.client == nil {
-		return fmt.Errorf("exporter or client is nil")
+		return nil
 	}
-	if e.client != nil {
-		e.client.CloseIdleConnections()
-	}
+	e.client.CloseIdleConnections()
 	return nil
 }
 

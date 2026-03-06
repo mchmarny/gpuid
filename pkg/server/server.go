@@ -73,7 +73,7 @@ func (s *server) Serve(ctx context.Context, handlers map[string]http.Handler) {
 	go func() {
 		<-ctx.Done()
 		s.logger.Info("server shutdown initiated")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second) //nolint:contextcheck // intentional: parent ctx is canceled, need fresh deadline for shutdown
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			s.logger.Error("server shutdown failed", slog.Any("err", err))

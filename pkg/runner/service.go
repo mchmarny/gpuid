@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/mchmarny/gpuid/pkg/counter"
@@ -59,6 +60,11 @@ func Run() {
 	if err := cmd.Init(ctx, logger); err != nil {
 		die("failed to initialize command: %v", logger, err)
 	}
+	defer func() {
+		if err := cmd.exporter.Close(ctx); err != nil {
+			logger.Warn("failed to close exporter", "err", err)
+		}
+	}()
 
 	// Create Kubernetes clientset with retry logic built into client
 	cs, cfg, err := buildRestConfig(cmd.Kubeconfig, cmd.QPS, cmd.Burst)
@@ -165,15 +171,21 @@ func runController(ctx context.Context, logger *slog.Logger, cs *kubernetes.Clie
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
+	var wg sync.WaitGroup
+
 	// Start HTTP server for metrics and health checks
 	logger.Info("starting server")
 	s := server.NewServer(server.WithLogger(logger), server.WithPort(cmd.ServerPort))
-	go s.Serve(ctx, map[string]http.Handler{
-		"/metrics": counter.Handler(),
+	wg.Go(func() {
+		s.Serve(ctx, map[string]http.Handler{
+			"/metrics": counter.Handler(),
+		})
 	})
 
 	logger.Info("starting kubernetes informer")
-	go informer.Run(stopCh)
+	wg.Go(func() {
+		informer.Run(stopCh)
+	})
 
 	// Wait for cache to sync before starting workers
 	// This ensures we have a consistent view of the cluster state
@@ -185,12 +197,16 @@ func runController(ctx context.Context, logger *slog.Logger, cs *kubernetes.Clie
 	logger.Info("cache synced, starting workers")
 	for i := 0; i < cmd.Workers; i++ {
 		logger.Debug("starting worker", "worker_id", i)
-		go do(ctx, logger.With("worker_id", i), cs, cfg, informer.GetIndexer(), q, cmd)
+		wg.Go(func() {
+			do(ctx, logger.With("worker_id", i), cs, cfg, informer.GetIndexer(), q, cmd)
+		})
 	}
 
 	<-ctx.Done() // Wait for shutdown signal
 	logger.Info("shutdown signal received, draining work queue")
 	q.ShutDownWithDrain() // Graceful shutdown: wait for queue to drain
+
+	wg.Wait()
 	logger.Info("controller shutdown complete")
 
 	return nil

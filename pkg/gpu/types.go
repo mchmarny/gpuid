@@ -23,6 +23,7 @@ func (r *SerialNumberReading) Slice() []string {
 		r.Node,
 		r.Machine,
 		r.Source,
+		r.Chassis,
 		r.GPU,
 		r.Time.Format(time.RFC3339),
 	}

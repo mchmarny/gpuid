@@ -122,7 +122,7 @@ func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.S
 			"record_count": fmt.Sprintf("%d", len(records)),
 			"timestamp":    timestamp.Format(time.RFC3339),
 			"format":       "csv",
-			"columns":      "cluster,node,machine,source,gpu,time", // Column order for DMS mapping
+			"columns":      "cluster,node,machine,source,chassis,gpu,time", // Column order for DMS mapping
 		},
 	}); err != nil {
 		return fmt.Errorf("failed to upload records to S3: %w", err)

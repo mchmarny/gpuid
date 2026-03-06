@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -121,10 +122,6 @@ func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.S
 			if rbErr := tx.Rollback(); rbErr != nil {
 				log.Error("transaction rollback failed", "error", rbErr)
 			}
-			return
-		}
-		if cmErr := tx.Commit(); cmErr != nil {
-			err = fmt.Errorf("failed to commit transaction: %w", cmErr)
 		}
 	}()
 
@@ -144,7 +141,7 @@ func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.S
 			continue
 		}
 
-		_, err := stmt.ExecContext(ctx,
+		_, err = stmt.ExecContext(ctx,
 			record.Cluster,
 			record.Node,
 			record.Machine,
@@ -160,7 +157,7 @@ func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.S
 	}
 
 	// Commit transaction
-	if err := tx.Commit(); err != nil {
+	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
@@ -256,6 +253,9 @@ func (c *Config) ConnectionString() string {
 		c.Host, c.Port, c.Database, c.User, c.Password, c.SSLMode)
 }
 
+// tableNameRegex validates that a table name contains only safe characters.
+var tableNameRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+
 // Validate ensures the PostgreSQL configuration is valid for operations.
 func (c *Config) Validate() error {
 	if c.Host == "" {
@@ -275,6 +275,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Table == "" {
 		return fmt.Errorf("postgres table name cannot be empty")
+	}
+	if !tableNameRegex.MatchString(c.Table) {
+		return fmt.Errorf("postgres table name contains invalid characters: %s", c.Table)
 	}
 
 	return nil

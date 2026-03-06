@@ -173,7 +173,7 @@ func processPod(
 	}
 
 	// Retrieve node provider ID for export metadata
-	nodeInfo, err := node.GetNodeProviderID(pctx, log, cs, cfg, pod.Spec.NodeName)
+	nodeInfo, err := node.GetNodeProviderID(pctx, log, cs, pod.Spec.NodeName)
 	if err != nil {
 		counterErr.Increment(pod.Spec.NodeName, pod.Name)
 		log.Warn("failed to get node provider ID",

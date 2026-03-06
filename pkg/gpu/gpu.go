@@ -33,11 +33,9 @@ func GetSerialNumbers(ctx context.Context, log *slog.Logger, cs *kubernetes.Clie
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute command in pod %s/%s: %w", pod.Namespace, pod.Name, err)
 	}
-	b := []byte(stdout)
-	_ = b
 
 	// parse output
-	d, err := parseSMIDevice(b)
+	d, err := parseSMIDevice([]byte(stdout))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse nvidia-smi output: %w", err)
 	}
