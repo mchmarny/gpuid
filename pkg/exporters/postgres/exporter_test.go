@@ -306,7 +306,7 @@ func TestInsertQueryTemplate(t *testing.T) {
 		}
 	}
 
-	expectedPlaceholders := 7 // cluster, node, machine, source, gpu, read_time, created_at
+	expectedPlaceholders := 8 // cluster, node, machine, source, chassis, gpu, read_time, created_at
 	if placeholderCount != expectedPlaceholders {
 		t.Errorf("Expected %d placeholders in query, found %d", expectedPlaceholders, placeholderCount)
 	}

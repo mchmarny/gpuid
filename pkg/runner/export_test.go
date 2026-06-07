@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestGetExporterSimple(t *testing.T) {
+func TestGetExporter_TypeDispatch(t *testing.T) {
 	ctx := context.Background()
 	log := slog.Default()
 
@@ -20,34 +20,33 @@ func TestGetExporterSimple(t *testing.T) {
 		wantErr      bool
 	}{
 		{"stdout", "stdout", false},
-		{"postgres", "postgres", true}, // Will fail without DB connection, but validates config
-		{"http", "http", true},         // Will fail without endpoint, but validates config
+		{"postgres", "postgres", true}, // Will fail without DB env vars
+		{"http", "http", true},         // Will fail without endpoint env var
 		{"empty_type", "", false},      // Defaults to stdout
 		{"unknown_type", "unknown", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exporter, err := GetExporterSimple(ctx, log, tt.exporterType)
+			exporter, err := GetExporter(ctx, log, ExporterConfig{Type: tt.exporterType})
 
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("GetExporterSimple() expected error but got none")
+					t.Errorf("GetExporter() expected error but got none")
 				}
 				return
 			}
 
 			if err != nil {
-				t.Errorf("GetExporterSimple() unexpected error: %v", err)
+				t.Errorf("GetExporter() unexpected error: %v", err)
 				return
 			}
 
 			if exporter == nil {
-				t.Errorf("GetExporterSimple() returned nil exporter")
+				t.Errorf("GetExporter() returned nil exporter")
 				return
 			}
 
-			// Cleanup
 			if err := exporter.Close(ctx); err != nil {
 				t.Errorf("Close() failed: %v", err)
 			}

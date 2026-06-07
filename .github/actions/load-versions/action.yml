@@ -1,0 +1,101 @@
+---
+name: 'Load Versions'
+description: 'Loads Go version from .go-version and tool versions from .settings.yaml as outputs'
+
+outputs:
+  go:
+    description: 'Go toolchain version'
+    value: ${{ steps.versions.outputs.go }}
+  golangci_lint:
+    description: 'golangci-lint version'
+    value: ${{ steps.versions.outputs.golangci_lint }}
+  yamllint:
+    description: 'yamllint version'
+    value: ${{ steps.versions.outputs.yamllint }}
+  grype:
+    description: 'grype version'
+    value: ${{ steps.versions.outputs.grype }}
+  kubectl:
+    description: 'kubectl version'
+    value: ${{ steps.versions.outputs.kubectl }}
+  kind:
+    description: 'kind version'
+    value: ${{ steps.versions.outputs.kind }}
+  yq:
+    description: 'yq version'
+    value: ${{ steps.versions.outputs.yq }}
+  coverage_threshold:
+    description: 'Minimum test coverage percentage'
+    value: ${{ steps.versions.outputs.coverage_threshold }}
+  lint_timeout:
+    description: 'Lint timeout duration'
+    value: ${{ steps.versions.outputs.lint_timeout }}
+  test_timeout:
+    description: 'Test timeout duration'
+    value: ${{ steps.versions.outputs.test_timeout }}
+  kind_node_image:
+    description: 'KinD node image for integration tests'
+    value: ${{ steps.versions.outputs.kind_node_image }}
+  kind_k8s_version:
+    description: 'KinD k8s version (wildcard form, e.g. 1.33.x)'
+    value: ${{ steps.versions.outputs.kind_k8s_version }}
+  kind_worker_count:
+    description: 'KinD worker count for integration tests'
+    value: ${{ steps.versions.outputs.kind_worker_count }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install yq
+      shell: bash
+      run: |
+        set -euo pipefail
+        if ! command -v yq >/dev/null 2>&1; then
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+        fi
+        yq --version
+
+    - name: Load versions
+      id: versions
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Go version is owned by .go-version (single source of truth).
+        echo "go=$(cat .go-version)" >> "$GITHUB_OUTPUT"
+
+        # Linting / security / testing tools come from .settings.yaml.
+        echo "golangci_lint=$(yq -r '.linting.golangci_lint' .settings.yaml)" >> "$GITHUB_OUTPUT"
+        echo "yamllint=$(yq -r '.linting.yamllint' .settings.yaml)" >> "$GITHUB_OUTPUT"
+        echo "grype=$(yq -r '.security_tools.grype' .settings.yaml)" >> "$GITHUB_OUTPUT"
+        echo "kubectl=$(yq -r '.testing_tools.kubectl' .settings.yaml)" >> "$GITHUB_OUTPUT"
+        echo "kind=$(yq -r '.testing_tools.kind' .settings.yaml)" >> "$GITHUB_OUTPUT"
+        echo "yq=$(yq -r '.testing_tools.yq' .settings.yaml)" >> "$GITHUB_OUTPUT"
+
+        # Quality thresholds.
+        echo "coverage_threshold=$(yq -r '.quality.coverage_threshold' .settings.yaml)" >> "$GITHUB_OUTPUT"
+        echo "lint_timeout=$(yq -r '.quality.lint_timeout' .settings.yaml)" >> "$GITHUB_OUTPUT"
+        echo "test_timeout=$(yq -r '.quality.test_timeout' .settings.yaml)" >> "$GITHUB_OUTPUT"
+
+        # Testing configuration.
+        echo "kind_node_image=$(yq -r '.testing.kind_node_image' .settings.yaml)" >> "$GITHUB_OUTPUT"
+        echo "kind_k8s_version=$(yq -r '.testing.kind_k8s_version' .settings.yaml)" >> "$GITHUB_OUTPUT"
+        echo "kind_worker_count=$(yq -r '.testing.kind_worker_count' .settings.yaml)" >> "$GITHUB_OUTPUT"
+
+    - name: Display loaded versions
+      shell: bash
+      run: |
+        echo "Loaded versions:"
+        echo "  go:                  ${{ steps.versions.outputs.go }}"
+        echo "  golangci_lint:       ${{ steps.versions.outputs.golangci_lint }}"
+        echo "  yamllint:            ${{ steps.versions.outputs.yamllint }}"
+        echo "  grype:               ${{ steps.versions.outputs.grype }}"
+        echo "  kubectl:             ${{ steps.versions.outputs.kubectl }}"
+        echo "  kind:                ${{ steps.versions.outputs.kind }}"
+        echo "  yq:                  ${{ steps.versions.outputs.yq }}"
+        echo "  coverage_threshold:  ${{ steps.versions.outputs.coverage_threshold }}"
+        echo "  lint_timeout:        ${{ steps.versions.outputs.lint_timeout }}"
+        echo "  test_timeout:        ${{ steps.versions.outputs.test_timeout }}"
+        echo "  kind_node_image:     ${{ steps.versions.outputs.kind_node_image }}"
+        echo "  kind_k8s_version:    ${{ steps.versions.outputs.kind_k8s_version }}"
+        echo "  kind_worker_count:   ${{ steps.versions.outputs.kind_worker_count }}"

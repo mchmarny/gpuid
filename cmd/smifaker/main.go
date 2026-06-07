@@ -1,32 +1,41 @@
 package main
 
 import (
+	"io"
 	"log"
 	"os"
+	"path/filepath"
 )
 
 const (
 	EnvVarContentPath  = "SMIFAKER_CONTENT_PATH"
-	DefaultContentPath = "/data/nvidia-smi.xml" // Default fallback
+	DefaultContentPath = "/data/nvidia-smi.xml"
 )
 
-func main() {
+// run streams the configured file to stdout. Split from main so deferred Close runs
+// even when streaming fails — main exits via os.Exit on a non-zero return.
+func run() error {
 	contentPath := os.Getenv(EnvVarContentPath)
 	if contentPath == "" {
 		contentPath = DefaultContentPath
 		log.Printf("Using default content path: %s", contentPath)
 	}
 
-	if _, err := os.Stat(contentPath); os.IsNotExist(err) {
-		log.Fatalf("file does not exist: %s", contentPath)
-	}
+	// Normalize the path so a relative input cannot escape via embedded "..".
+	contentPath = filepath.Clean(contentPath)
 
-	b, err := os.ReadFile(contentPath)
+	f, err := os.Open(contentPath) // #nosec G304 — test harness, path comes from operator-controlled env
 	if err != nil {
-		log.Fatalf("failed to read file %s: %v", contentPath, err)
+		return err
 	}
+	defer f.Close()
 
-	if _, err := os.Stdout.Write(b); err != nil {
-		log.Fatalf("failed to write to stdout: %v", err)
+	_, err = io.Copy(os.Stdout, f)
+	return err
+}
+
+func main() {
+	if err := run(); err != nil {
+		log.Fatalf("smifaker failed: %v", err)
 	}
 }

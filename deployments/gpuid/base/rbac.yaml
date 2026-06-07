@@ -7,16 +7,13 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["pods"]
-    verbs: ["get", "list", "watch", "delete"]
+    verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["pods/exec"]
     verbs: ["create"]
   - apiGroups: [""]
-    resources: ["pods/log"]
-    verbs: ["get"]
-  - apiGroups: [""]
     resources: ["nodes"]
-    verbs: ["get", "list", "watch", "update"]
+    verbs: ["get", "list", "watch", "patch"]
 
 ---
 # Bind cluster-wide role to gpuid SA in the gpuid namespace
@@ -34,28 +31,27 @@ subjects:
     namespace: gpuid
 
 ---
-# Namespace-scoped: full control over gpuid's own namespace
+# Namespace-scoped: leader election lease in the gpuid namespace.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: gpuid-namespace-pods-admin
+  name: gpuid-leader-election
   namespace: gpuid
 rules:
-  - apiGroups: [""]
-    resources: ["*"]
-    verbs: ["*"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
 
 ---
-# Bind namespace-scoped role to gpuid SA in the gpuid namespace
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: gpuid-namespace-pods-admin
+  name: gpuid-leader-election
   namespace: gpuid
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: gpuid-namespace-pods-admin
+  name: gpuid-leader-election
 subjects:
   - kind: ServiceAccount
     name: gpuid

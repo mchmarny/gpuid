@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -17,7 +18,7 @@ import (
 // Compile-time check to ensure MockUpdater implements Updater interface
 var _ Updater = (*MockUpdater)(nil)
 
-// MockUpdater for testing - implements the Updater interface
+// MockUpdater simulates the kube client for patch-based label updates.
 type MockUpdater struct {
 	node        *corev1.Node
 	updateCount int
@@ -33,21 +34,35 @@ func (m *MockUpdater) GetNode(_ context.Context, _ string) (*corev1.Node, error)
 	if m.node == nil {
 		return nil, errors.New("node not found")
 	}
-	// Return a copy to simulate Kubernetes behavior
-	nodeCopy := m.node.DeepCopy()
-	return nodeCopy, nil
+	return m.node.DeepCopy(), nil
 }
 
-func (m *MockUpdater) UpdateNode(_ context.Context, node *corev1.Node) (*corev1.Node, error) {
+func (m *MockUpdater) PatchNodeLabels(_ context.Context, _ string, patch []byte) error {
 	m.updateCount++
 
 	if m.shouldFail && m.updateCount <= m.failCount {
-		return nil, errors.New("simulated update failure")
+		return errors.New("simulated patch failure")
 	}
 
-	// Simulate successful update
-	m.node = node.DeepCopy()
-	return m.node, nil
+	var payload struct {
+		Metadata struct {
+			Labels map[string]*string `json:"labels"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(patch, &payload); err != nil {
+		return err
+	}
+	if m.node.Labels == nil {
+		m.node.Labels = map[string]string{}
+	}
+	for k, v := range payload.Metadata.Labels {
+		if v == nil {
+			delete(m.node.Labels, k)
+			continue
+		}
+		m.node.Labels[k] = *v
+	}
+	return nil
 }
 
 func (m *MockUpdater) SetFailure(shouldFail bool, failCount int) {

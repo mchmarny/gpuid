@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# check-tools: compares installed tool versions against the pins in .settings.yaml.
+#
+# Returns 0 if all tools are installed at the expected version, 1 otherwise.
+# Tools that are not installed at all are reported as missing.
+
+set -euo pipefail
+
+SETTINGS=".settings.yaml"
+GO_VERSION_FILE=".go-version"
+
+if [[ ! -f "${SETTINGS}" ]]; then
+  echo "error: ${SETTINGS} not found (run from repo root)" >&2
+  exit 1
+fi
+
+if ! command -v yq >/dev/null 2>&1; then
+  echo "error: yq is required (https://github.com/mikefarah/yq)" >&2
+  exit 1
+fi
+
+red()    { printf '\033[31m%s\033[0m' "$*"; }
+green()  { printf '\033[32m%s\033[0m' "$*"; }
+yellow() { printf '\033[33m%s\033[0m' "$*"; }
+
+# normalize trims a leading "v" so we can compare e.g. v1.2.3 with 1.2.3.
+normalize() { echo "${1#v}"; }
+
+mismatched=0
+
+# check NAME EXPECTED ACTUAL — emits an aligned status line, increments
+# mismatched if expected != actual (after v-prefix normalization).
+check() {
+  local name="$1" expected="$2" actual="$3"
+  local e a
+  e=$(normalize "${expected}")
+  a=$(normalize "${actual}")
+
+  if [[ -z "${actual}" || "${actual}" == "not installed" ]]; then
+    printf '  %-18s %-15s %s\n' "${name}" "${expected}" "$(red "MISSING")"
+    mismatched=$((mismatched + 1))
+    return
+  fi
+
+  if [[ "${e}" == "${a}" ]]; then
+    printf '  %-18s %-15s %s\n' "${name}" "${expected}" "$(green "ok (${actual})")"
+  else
+    printf '  %-18s %-15s %s\n' "${name}" "${expected}" "$(yellow "drift (have ${actual})")"
+    mismatched=$((mismatched + 1))
+  fi
+}
+
+# Expected versions, sourced from the single source of truth.
+expected_go=$(cat "${GO_VERSION_FILE}" 2>/dev/null || echo "")
+expected_golangci=$(yq -r '.linting.golangci_lint' "${SETTINGS}")
+expected_yamllint=$(yq -r '.linting.yamllint'  "${SETTINGS}")
+expected_grype=$(yq -r '.security_tools.grype' "${SETTINGS}")
+expected_kubectl=$(yq -r '.testing_tools.kubectl' "${SETTINGS}")
+expected_kind=$(yq -r '.testing_tools.kind' "${SETTINGS}")
+expected_yq=$(yq -r '.testing_tools.yq' "${SETTINGS}")
+
+# Installed versions (or empty if not installed).
+have_go=$(go version 2>/dev/null | awk '{print $3}' | sed 's/go//')
+have_golangci=$(golangci-lint --version 2>/dev/null | awk '{print $4}')
+have_yamllint=$(yamllint --version 2>/dev/null | awk '{print $2}')
+have_grype=$(grype version 2>/dev/null | grep -i '^Version:' | awk '{print $2}')
+have_kubectl=$(kubectl version --client 2>/dev/null | grep -i 'Client Version:' | awk '{print $3}' | sed 's/v//')
+have_kind=$(kind version 2>/dev/null | awk '{print $2}' | sed 's/v//')
+have_yq=$(yq --version 2>/dev/null | awk '{print $NF}')
+
+printf '%-20s %-15s %s\n' "TOOL" "EXPECTED" "STATUS"
+printf '%-20s %-15s %s\n' "----" "--------" "------"
+
+check "go"            "${expected_go}"        "${have_go}"
+check "golangci-lint" "${expected_golangci}"  "${have_golangci}"
+check "yamllint"      "${expected_yamllint}"  "${have_yamllint}"
+check "grype"         "${expected_grype}"     "${have_grype}"
+check "kubectl"       "${expected_kubectl}"   "${have_kubectl}"
+check "kind"          "${expected_kind}"      "${have_kind}"
+check "yq"            "${expected_yq}"        "${have_yq}"
+
+echo ""
+if (( mismatched == 0 )); then
+  echo "All tools match .settings.yaml"
+  exit 0
+fi
+echo "${mismatched} tool(s) missing or drifted from .settings.yaml"
+exit 1

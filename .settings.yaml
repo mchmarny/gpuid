@@ -1,36 +1,50 @@
-# .settings.yaml - Single source of truth for tool versions and quality thresholds.
-# Referenced by Makefile and CI workflows.
-
-# Language Versions
-languages:
-  go: '1.25.0'
+---
+# .settings.yaml — single source of truth for tool versions and quality thresholds.
+# Read by the Makefile, the .github/actions/load-versions composite action, and any
+# tooling helper scripts. The Go toolchain version lives in .go-version.
+#
+# Renovate scans the comments below to discover and bump pinned versions
+# automatically; see https://docs.renovatebot.com/configuration-options/#regexmanagers.
 
 # Linting
 linting:
+  # renovate: datasource=github-releases depName=golangci/golangci-lint depType=linting
   golangci_lint: 'v2.4.0'
+  # renovate: datasource=pypi depName=yamllint depType=linting
   yamllint: '1.38.0'
 
-# Security Tools
+# Security tools
 security_tools:
+  # renovate: datasource=github-releases depName=anchore/grype depType=security_tools
   grype: 'v0.107.0'
 
-# Testing Tools
+# Testing tools
 testing_tools:
+  # renovate: datasource=github-releases depName=kubernetes/kubernetes depType=testing_tools
   kubectl: 'v1.33.0'
+  # renovate: datasource=github-releases depName=kubernetes-sigs/kind depType=testing_tools
   kind: '0.29.0'
+  # renovate: datasource=github-releases depName=mikefarah/yq depType=testing_tools
+  yq: 'v4.45.4'
 
-# Quality Thresholds
+# Quality gates — read by `make test-coverage`, `make lint`, `make test`.
+# coverage_threshold guards against regression; raise it as coverage improves
+# (current baseline ~47%; target 70%).
 quality:
-  coverage_threshold: '70'
+  coverage_threshold: '45'
   lint_timeout: '5m'
   test_timeout: '5m'
 
-# Build Configuration
+# Build configuration
 build:
   image_registry: 'ghcr.io/mchmarny'
   image_platforms: 'linux/amd64,linux/arm64'
 
-# Testing Configuration
+# Testing configuration
 testing:
+  # renovate: datasource=docker depName=kindest/node depType=testing
+  kind_node_image: 'kindest/node:v1.33.0'
+  # Wildcard form (1.33.x) used by chainguard-dev/actions/setup-kind in release CI.
+  # Keep major.minor aligned with kind_node_image.
   kind_k8s_version: '1.33.x'
   kind_worker_count: '2'

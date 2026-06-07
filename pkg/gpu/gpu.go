@@ -28,8 +28,7 @@ type Serials struct {
 // and extracts the serial numbers of all GPUs present. The function ensures that only
 // unique serial numbers are returned, handling any duplicates that may arise.
 func GetSerialNumbers(ctx context.Context, log *slog.Logger, cs *kubernetes.Clientset, cfg *rest.Config, pod *corev1.Pod, container string) ([]*Serials, error) {
-	// get smi output
-	stdout, err := execShell(ctx, cfg, cs, pod, container)
+	stdout, err := execShell(ctx, log, cfg, cs, pod, container)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute command in pod %s/%s: %w", pod.Namespace, pod.Name, err)
 	}
@@ -79,8 +78,10 @@ func GetSerialNumbers(ctx context.Context, log *slog.Logger, cs *kubernetes.Clie
 }
 
 // execShell executes a shell command in a pod container using the Kubernetes exec API.
-// This function handles the complex SPDY streaming protocol and provides proper error classification.
-func execShell(ctx context.Context, cfg *rest.Config, cs *kubernetes.Clientset, pod *corev1.Pod, container string) (string, error) {
+// nvidia-smi can emit benign warnings to stderr (driver mismatches, MIG hints) while
+// stdout still contains valid XML, so stderr alone does not signal failure — only a
+// non-zero exit code or a transport error is fatal.
+func execShell(ctx context.Context, log *slog.Logger, cfg *rest.Config, cs *kubernetes.Clientset, pod *corev1.Pod, container string) (string, error) {
 	req := cs.CoreV1().RESTClient().
 		Post().
 		Namespace(pod.Namespace).
@@ -93,47 +94,36 @@ func execShell(ctx context.Context, cfg *rest.Config, cs *kubernetes.Clientset, 
 			Stdin:     false,
 			Stdout:    true,
 			Stderr:    true,
-			TTY:       false, // Disable TTY for proper stdout/stderr separation
+			TTY:       false,
 		}, scheme.ParameterCodec)
 
-	// Create the SPDY executor for streaming communication
 	executor, err := remotecommand.NewSPDYExecutor(cfg, http.MethodPost, req.URL())
 	if err != nil {
 		return "", fmt.Errorf("failed to create SPDY executor: %w", err)
 	}
 
-	// Capture stdout and stderr in separate buffers
 	var stdout, stderr bytes.Buffer
-
-	// Execute the command with context cancellation support
-	// The context allows for proper timeout handling and cancellation
 	err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{
 		Stdout: &stdout,
 		Stderr: &stderr,
 		Tty:    false,
 	})
 
-	// Convert outputs to strings for easier handling
 	stdoutStr := stdout.String()
 	stderrStr := stderr.String()
 
-	// Handle stderr output (command executed but produced errors)
 	if stderrStr != "" {
-		return "", fmt.Errorf("command stderr: %s", stderrStr)
+		log.Debug("nvidia-smi stderr", "ns", pod.Namespace, "pod", pod.Name, "stderr", stderrStr)
 	}
 
-	// Handle success case (exit code 0)
 	if err == nil {
 		return stdoutStr, nil
 	}
 
-	// Classify the error type for better error handling
 	var exitError utilexec.ExitError
 	if errors.As(err, &exitError) {
-		// Command executed but returned non-zero exit code
-		return stdoutStr, fmt.Errorf("command failed with exit code %d: %w", exitError.ExitStatus(), err)
+		return stdoutStr, fmt.Errorf("command failed with exit code %d (stderr=%q): %w", exitError.ExitStatus(), stderrStr, err)
 	}
 
-	// Network/transport error (connection issues, timeouts, etc.)
 	return stdoutStr, fmt.Errorf("execution stream error: %w", err)
 }

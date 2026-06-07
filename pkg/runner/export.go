@@ -19,6 +19,12 @@ const (
 	defaultBatchSize  = 10
 	defaultRetryCount = 2
 	defaultTimeout    = 30 * time.Second
+
+	// Supported exporter type identifiers.
+	ExporterTypeStdout   = "stdout"
+	ExporterTypeS3       = "s3"
+	ExporterTypePostgres = "postgres"
+	ExporterTypeHTTP     = "http"
 )
 
 // ExporterConfig holds configuration for initializing exporters.
@@ -52,6 +58,8 @@ type Exporter struct {
 }
 
 // GetExporter initializes an exporter based on the provided configuration.
+// The startup health check is skipped — /readyz is the authoritative health gate.
+// This avoids forcing the controller to flap on slow/air-gapped dependencies.
 func GetExporter(ctx context.Context, log *slog.Logger, config ExporterConfig) (*Exporter, error) {
 	if strings.TrimSpace(config.Type) == "" {
 		config.Type = DefaultExporterType // Default to stdout if not specified
@@ -81,19 +89,19 @@ func GetExporter(ctx context.Context, log *slog.Logger, config ExporterConfig) (
 
 	var err error
 	switch config.Type {
-	case DefaultExporterType:
+	case ExporterTypeStdout:
 		e.backend = stdout.New()
-	case "s3":
+	case ExporterTypeS3:
 		e.backend, err = s3.New(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize S3 exporter: %w", err)
 		}
-	case "postgres":
+	case ExporterTypePostgres:
 		e.backend, err = postgres.New(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize PostgreSQL exporter: %w", err)
 		}
-	case "http":
+	case ExporterTypeHTTP:
 		e.backend, err = http.New(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize HTTP exporter: %w", err)
@@ -102,25 +110,11 @@ func GetExporter(ctx context.Context, log *slog.Logger, config ExporterConfig) (
 		return nil, fmt.Errorf("unknown exporter type: %s", config.Type)
 	}
 
-	// Validate the backend is properly initialized
 	if e.backend == nil {
 		return nil, fmt.Errorf("failed to initialize backend for type: %s", config.Type)
 	}
 
-	// Perform health check during initialization
-	if err = e.backend.Health(ctx); err != nil {
-		return nil, fmt.Errorf("exporter health check failed: %w", err)
-	}
-
 	return e, nil
-}
-
-// GetExporterSimple provides a backwards-compatible constructor for simple use cases.
-func GetExporterSimple(ctx context.Context, log *slog.Logger, exporterType string) (*Exporter, error) {
-	config := ExporterConfig{
-		Type: exporterType,
-	}
-	return GetExporter(ctx, log, config)
 }
 
 // Export handles exporting GPU serial numbers for a given pod using the configured exporter.

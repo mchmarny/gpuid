@@ -3,36 +3,39 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
-	// PostgreSQL driver import - required for database/sql driver registration
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 	"github.com/mchmarny/gpuid/pkg/gpu"
 )
 
 // Environment variable names for PostgreSQL configuration
 const (
 	// Required environment variables
-	EnvPostgresHost     = "POSTGRES_HOST"
-	EnvPostgresPort     = "POSTGRES_PORT"
-	EnvPostgresDB       = "POSTGRES_DB"
-	EnvPostgresUser     = "POSTGRES_USER"
-	EnvPostgresPassword = "POSTGRES_PASSWORD" // #nosec G101 - This is an environment variable name, not a credential
-	EnvPostgresSSLMode  = "POSTGRES_SSLMODE"
-	EnvPostgresTable    = "POSTGRES_TABLE"
+	EnvPostgresHost        = "POSTGRES_HOST"
+	EnvPostgresPort        = "POSTGRES_PORT"
+	EnvPostgresDB          = "POSTGRES_DB"
+	EnvPostgresUser        = "POSTGRES_USER"
+	EnvPostgresPassword    = "POSTGRES_PASSWORD" // #nosec G101 - This is an environment variable name, not a credential
+	EnvPostgresSSLMode     = "POSTGRES_SSLMODE"
+	EnvPostgresTable       = "POSTGRES_TABLE"
+	EnvPostgresAutoMigrate = "POSTGRES_AUTO_MIGRATE"
 
 	// Default values
 	defaultPostgresPort  = 5432
 	defaultPostgresTable = "gpu"
 	defaultSSLMode       = "require"
 
-	// SQL query template for inserting GPU serial readings
-	insertQueryTemplate = `INSERT INTO %s (cluster, node, machine, source, gpu, read_time, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	// SQL query template for inserting GPU serial readings.
+	// Retained for fallback / tests; production writes use pq.CopyIn for batch throughput.
+	insertQueryTemplate = `INSERT INTO %s (cluster, node, machine, source, chassis, gpu, read_time, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 )
 
 // Config holds PostgreSQL-specific configuration parameters.
@@ -49,8 +52,9 @@ type Config struct {
 // Exporter implements the ExporterBackend interface for PostgreSQL.
 // This exporter supports batch inserts and connection pooling for high-throughput.
 type Exporter struct {
-	db     *sql.DB
-	config Config
+	db          *sql.DB
+	config      Config
+	autoMigrate bool
 }
 
 // New creates a new PostgreSQL exporter with configuration loaded from environment variables.
@@ -92,56 +96,61 @@ func New(ctx context.Context) (*Exporter, error) {
 	}
 
 	exporter := &Exporter{
-		db:     db,
-		config: config,
+		db:          db,
+		config:      config,
+		autoMigrate: strings.EqualFold(os.Getenv(EnvPostgresAutoMigrate), "true"),
 	}
 
-	// Initialize database schema if needed
-	if err := exporter.initializeSchema(ctx); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to initialize database schema: %w", err)
+	// Schema bootstrap is opt-in. Most deployments should manage schema out-of-band
+	// (migrations / DBA tooling) and run the controller with limited DDL grants.
+	if exporter.autoMigrate {
+		if err := exporter.initializeSchema(ctx); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("failed to initialize database schema: %w", err)
+		}
 	}
 
 	return exporter, nil
 }
 
-// Write inserts GPU serial number readings into PostgreSQL using batch operations.
-// This method provides efficient bulk inserts with proper error handling and transaction management.
+// Write inserts GPU serial number readings into PostgreSQL using the COPY protocol
+// for true batch throughput (one round-trip + bulk stream instead of N round-trips).
 func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.SerialNumberReading) error {
 	if len(records) == 0 {
 		return nil
 	}
 
-	// Start transaction for batch insert
 	tx, err := e.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
+
+	committed := false
 	defer func() {
-		if err != nil {
-			if rbErr := tx.Rollback(); rbErr != nil {
+		if !committed {
+			if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
 				log.Error("transaction rollback failed", "error", rbErr)
 			}
 		}
 	}()
 
-	// Prepare batch insert statement
-	query := fmt.Sprintf(insertQueryTemplate, e.config.Table)
-
-	stmt, err := tx.PrepareContext(ctx, query)
+	// pq.CopyIn is the documented entry-point for the COPY FROM STDIN protocol
+	// under database/sql; lib/pq's deprecation note refers to library callers
+	// who can use the pgx driver instead. We stay on database/sql, so this is
+	// the correct API.
+	stmt, err := tx.PrepareContext(ctx, pq.CopyIn(e.config.Table, //nolint:staticcheck // SA1019: see comment above
+		"cluster", "node", "machine", "source", "chassis", "gpu", "read_time", "created_at"))
 	if err != nil {
-		return fmt.Errorf("failed to prepare insert statement: %w", err)
+		return fmt.Errorf("failed to prepare COPY statement: %w", err)
 	}
-	defer stmt.Close()
 
-	// Insert records in batch
 	now := time.Now().UTC()
+	rows := 0
 	for _, record := range records {
 		if record == nil {
 			continue
 		}
-
-		_, err = stmt.ExecContext(ctx,
+		if _, err := stmt.ExecContext(ctx,
 			record.Cluster,
 			record.Node,
 			record.Machine,
@@ -150,20 +159,30 @@ func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.S
 			record.GPU,
 			record.Time,
 			now,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to insert record: %w", err)
+		); err != nil {
+			stmt.Close()
+			return fmt.Errorf("failed to buffer record for COPY: %w", err)
 		}
+		rows++
 	}
 
-	// Commit transaction
-	if err = tx.Commit(); err != nil {
+	// Flush the COPY buffer.
+	if _, err := stmt.ExecContext(ctx); err != nil {
+		stmt.Close()
+		return fmt.Errorf("failed to flush COPY: %w", err)
+	}
+	if err := stmt.Close(); err != nil {
+		return fmt.Errorf("failed to close COPY statement: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
+	committed = true
 
 	log.Info("export completed",
 		"table", e.config.Table,
-		"records", len(records),
+		"records", rows,
 		"database", e.config.Database)
 
 	return nil

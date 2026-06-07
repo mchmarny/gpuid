@@ -12,7 +12,7 @@ import (
 
 // Server defines the interface for the server that handles metrics and health checks.
 type Server interface {
-	Serve(ctx context.Context, handlers map[string]http.Handler)
+	Serve(ctx context.Context, handlers map[string]http.Handler) error
 }
 
 // Option is a functional option for configuring Server.
@@ -57,7 +57,9 @@ type server struct {
 }
 
 // Serve initializes and starts the HTTP server for metrics and health checks.
-func (s *server) Serve(ctx context.Context, handlers map[string]http.Handler) {
+// Returns nil on graceful shutdown (ctx cancellation), or an error if the server
+// fails to start or terminates unexpectedly (e.g., port already in use).
+func (s *server) Serve(ctx context.Context, handlers map[string]http.Handler) error {
 	handler := s.buildHandler(handlers)
 
 	srv := &http.Server{
@@ -84,7 +86,9 @@ func (s *server) Serve(ctx context.Context, handlers map[string]http.Handler) {
 
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		s.logger.ErrorContext(ctx, "failed to start metrics server", slog.Any("err", err))
+		return fmt.Errorf("metrics server failed: %w", err)
 	}
+	return nil
 }
 
 // buildHandler constructs the HTTP handler mux for the server.

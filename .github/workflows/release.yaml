@@ -1,15 +1,33 @@
+---
 name: release
+
 on:
   push:
     tags:
-    - 'v[0-9]+.[0-9]+.[0-9]+'  # Only build tag with semantic versioning format
+      - 'v[0-9]+.[0-9]+.[0-9]+'  # Only build tags with semantic versioning format
 
 permissions:
   contents: read
 
 jobs:
 
+  # Quality gate. Must pass before the tag is built, signed, e2e'd, or
+  # released. Reuses the same reusable workflow that main.yaml invokes for
+  # push/PR — same test, lint, and scan jobs — so a tag can never escape
+  # checks that a PR couldn't.
+  qualify:
+    uses: ./.github/workflows/qualification.yaml
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      security-events: write
+    with:
+      coverage_report: true
+      enforce_coverage: true
+
   build:
+    needs: [qualify]
     env:
       IMAGE_NAME: gpuid
       FAKER_NAME: smifaker
@@ -29,39 +47,39 @@ jobs:
       attestations: write
     steps:
 
-    # build the image (composite action handles checkout internally)
-    - uses: mchmarny/common/go-build@994d32fc6dcff3e6006a59db9d20b9e201423cb4  # v0.2.6
-      id: build
-      with:
-        main-path: cmd/gpuid/main.go
-        image-uri: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
-        release-version: ${{ github.ref_name }}
-        registry-username: ${{ github.actor }}
-        registry-password: ${{ secrets.GITHUB_TOKEN }}
+      # build the image (composite action handles checkout internally)
+      - uses: mchmarny/common/go-build@994d32fc6dcff3e6006a59db9d20b9e201423cb4  # v0.2.6
+        id: build
+        with:
+          main-path: cmd/gpuid/main.go
+          image-uri: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          release-version: ${{ github.ref_name }}
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
 
-    # read settings for kind (repo already checked out by go-build)
-    - name: Read settings
-      id: settings
-      run: |
-        echo "kind-version=$(yq -r '.testing_tools.kind' .settings.yaml)" >> "$GITHUB_OUTPUT"
-        echo "k8s-version=$(yq -r '.testing.kind_k8s_version' .settings.yaml)" >> "$GITHUB_OUTPUT"
-        echo "worker-count=$(yq -r '.testing.kind_worker_count' .settings.yaml)" >> "$GITHUB_OUTPUT"
+      # read settings for kind (repo already checked out by go-build)
+      - name: Read settings
+        id: settings
+        run: |
+          echo "kind-version=$(yq -r '.testing_tools.kind' .settings.yaml)" >> "$GITHUB_OUTPUT"
+          echo "k8s-version=$(yq -r '.testing.kind_k8s_version' .settings.yaml)" >> "$GITHUB_OUTPUT"
+          echo "worker-count=$(yq -r '.testing.kind_worker_count' .settings.yaml)" >> "$GITHUB_OUTPUT"
 
-    # run integration tests with kind
-    - uses: chainguard-dev/actions/setup-kind@e9290faa91aa6b1226df129cb450f2ff49235b92  # v1.6.6
-      with:
-        kind-version: ${{ steps.settings.outputs.kind-version }}
-        k8s-version: ${{ steps.settings.outputs.k8s-version }}
-        kind-worker-count: ${{ steps.settings.outputs.worker-count }}
-    - name: Update deployment with the new image
-      run: tools/image ${{ steps.build.outputs.image-uri }} ${{ env.DEPLOYMENT_PATCH_FILE }}
-    - name: Execute end-to-end tests
-      run: tools/e2e
+      # run integration tests with kind
+      - uses: chainguard-dev/actions/setup-kind@e9290faa91aa6b1226df129cb450f2ff49235b92  # v1.6.6
+        with:
+          kind-version: ${{ steps.settings.outputs.kind-version }}
+          k8s-version: ${{ steps.settings.outputs.k8s-version }}
+          kind-worker-count: ${{ steps.settings.outputs.worker-count }}
+      - name: Update deployment with the new image
+        run: tools/image ${{ steps.build.outputs.image-uri }} ${{ env.DEPLOYMENT_PATCH_FILE }}
+      - name: Execute end-to-end tests
+        run: tools/e2e
 
-    # create a release
-    - name: Set up GitHub CLI
-      run: echo "${{ github.token }}" | gh auth login --with-token
-    - name: Create release assets
-      run: tools/assets ${{ github.ref_name }}
-    - name: Create release with notes
-      run: gh release create ${{ github.ref_name }} --generate-notes dist/*.tar.gz dist/*.zip
+      # create a release
+      - name: Set up GitHub CLI
+        run: echo "${{ github.token }}" | gh auth login --with-token
+      - name: Create release assets
+        run: tools/assets ${{ github.ref_name }}
+      - name: Create release with notes
+        run: gh release create ${{ github.ref_name }} --generate-notes dist/*.tar.gz dist/*.zip

@@ -1,0 +1,51 @@
+---
+name: 'Go Test'
+description: 'Setup Go, run tests with race detector + coverage, optionally enforce coverage threshold and upload report'
+
+inputs:
+  go_version:
+    description: 'Go version to install (from .go-version)'
+    required: true
+  coverage_report:
+    description: 'Upload coverage report to codecov (true/false)'
+    required: false
+    default: 'false'
+  coverage_threshold:
+    description: 'Minimum required total coverage percentage'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Go
+      uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00  # v6.0.0
+      with:
+        go-version: ${{ inputs.go_version }}
+        cache: true
+
+    - name: Verify go.mod is tidy
+      shell: bash
+      run: |
+        go mod tidy
+        git diff --exit-code go.mod go.sum || {
+          echo "::error::go.mod/go.sum drifted; run 'make tidy' and commit the result";
+          exit 1;
+        }
+
+    - name: Run tests
+      shell: bash
+      run: make test
+
+    - name: Enforce coverage threshold
+      if: inputs.coverage_threshold != ''
+      shell: bash
+      run: COVERAGE_THRESHOLD=${{ inputs.coverage_threshold }} make test-coverage
+
+    - name: Upload coverage to Codecov
+      if: inputs.coverage_report == 'true'
+      uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7  # v5.5.1
+      with:
+        fail_ci_if_error: true
+        use_oidc: true
+        files: ./coverage.out

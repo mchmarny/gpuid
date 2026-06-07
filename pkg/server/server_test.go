@@ -116,7 +116,7 @@ func TestServer_Serve(t *testing.T) {
 	done := make(chan bool)
 	go func() {
 		defer close(done)
-		server.Serve(ctx, map[string]http.Handler{
+		_ = server.Serve(ctx, map[string]http.Handler{
 			"/test": http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 				fmt.Fprint(w, "test response")
@@ -191,7 +191,7 @@ func TestServer_ServeWithNilHandlers(t *testing.T) {
 	done := make(chan bool)
 	go func() {
 		defer close(done)
-		server.Serve(ctx, nil) // Pass nil handlers
+		_ = server.Serve(ctx, nil) // Pass nil handlers
 	}()
 
 	// Give server time to start

@@ -341,6 +341,14 @@ func TestListEnvVars(t *testing.T) {
 		EnvVarKubeconfig,
 		EnvVarLogLevel,
 		EnvVarServerPort,
+		EnvVarLeaderElection,
+		EnvVarLeaseNamespace,
+		EnvVarLeaseName,
+		EnvVarLeaseDuration,
+		EnvVarLeaseRenew,
+		EnvVarLeaseRetry,
+		EnvVarPodName,
+		EnvVarPodNamespace,
 	}
 
 	if !reflect.DeepEqual(envVars, expectedVars) {
@@ -369,7 +377,10 @@ func TestNewCommandFromEnvVars(t *testing.T) {
 	os.Setenv(EnvVarClusterName, testClusterName)
 	os.Setenv(EnvVarWorkers, "5")
 
-	cmd := NewCommandFromEnvVars()
+	cmd, err := NewCommandFromEnvVars()
+	if err != nil {
+		t.Fatalf("NewCommandFromEnvVars() unexpected error: %v", err)
+	}
 	if cmd == nil {
 		t.Fatal("NewCommandFromEnvVars() returned nil")
 	}

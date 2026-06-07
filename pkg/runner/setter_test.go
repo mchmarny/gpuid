@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// TestUIDSet_ConcurrentAccess tests that uidSet handles concurrent access safely
+// TestUIDSet_ConcurrentAccess tests that uidSet handles concurrent access safely.
 func TestUIDSet_ConcurrentAccess(t *testing.T) {
 	set := newUIDSet()
 	const numGoroutines = 100
@@ -16,88 +16,74 @@ func TestUIDSet_ConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
-	// Start multiple goroutines that concurrently add and check UIDs
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
 
-			for j := 0; j < numOperations; j++ {
+			for j := range numOperations {
 				uid := fmt.Sprintf("uid-%d-%d", id, j)
-
-				// Add the UID
 				set.Add(uid)
 
-				// Check if it exists
 				if !set.Has(uid) {
 					t.Errorf("UID %s should exist after adding", uid)
-				}
-
-				// Add some old UIDs to trigger cleanup during Has() calls
-				if j%10 == 0 {
-					oldUID := fmt.Sprintf("old-uid-%d-%d", id, j)
-					// Directly access internal map for testing (normally wouldn't do this)
-					set.mu.Lock()
-					set.m[oldUID] = time.Now().Add(-35 * time.Minute) // Older than 30 minutes
-					set.mu.Unlock()
 				}
 			}
 		}(i)
 	}
 
-	// Wait for all goroutines to complete
 	wg.Wait()
 }
 
-// TestUIDSet_ExpirationCleanup tests that old entries are properly cleaned up
+// TestUIDSet_ExpirationCleanup tests that old entries are treated as absent and
+// removed by the sweeper.
 func TestUIDSet_ExpirationCleanup(t *testing.T) {
 	set := newUIDSet()
 
-	// Add some UIDs with different timestamps
-	currentTime := time.Now()
 	recentUID := "recent-uid"
 	oldUID := "old-uid"
 
 	set.Add(recentUID)
-	// Add old UID directly for testing
+	// Inject an old UID directly so it qualifies for expiry.
 	set.mu.Lock()
-	set.m[oldUID] = currentTime.Add(-35 * time.Minute) // Older than 30 minutes
+	set.m[oldUID] = time.Now().Add(-(cacheTTL + time.Minute))
 	set.mu.Unlock()
 
-	// Check that recent UID exists and old UID gets cleaned up
 	if !set.Has(recentUID) {
 		t.Error("Recent UID should still exist")
 	}
 
-	// The Has() call should have cleaned up the old UID
-	set.mu.Lock()
+	if set.Has(oldUID) {
+		t.Error("Expired UID should report as absent")
+	}
+
+	// Force a sweep to verify the entry is also removed from the map.
+	set.sweep()
+
+	set.mu.RLock()
 	_, exists := set.m[oldUID]
-	set.mu.Unlock()
+	set.mu.RUnlock()
 
 	if exists {
-		t.Error("Old UID should have been cleaned up")
+		t.Error("Old UID should have been removed by sweep")
 	}
 }
 
-// TestUIDSet_BasicOperations tests basic add and check operations
+// TestUIDSet_BasicOperations tests basic add and check operations.
 func TestUIDSet_BasicOperations(t *testing.T) {
 	set := newUIDSet()
 
 	uid := "test-uid"
 
-	// Initially should not exist
 	if set.Has(uid) {
 		t.Error("UID should not exist initially")
 	}
 
-	// Add the UID
 	set.Add(uid)
 
-	// Should now exist
 	if !set.Has(uid) {
 		t.Error("UID should exist after adding")
 	}
 
-	// Should still exist on subsequent checks
 	if !set.Has(uid) {
 		t.Error("UID should still exist on second check")
 	}

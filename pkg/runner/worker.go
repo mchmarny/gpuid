@@ -2,9 +2,10 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"github.com/mchmarny/gpuid/pkg/counter"
@@ -21,9 +22,20 @@ var (
 	// Metrics for monitoring command execution outcomes.
 	counterSuccess = counter.New("gpuid_export_success_total", "Total number of successful export executions", "node", "pod")
 	counterErr     = counter.New("gpuid_export_failure_total", "Total number of failed export executions", "node", "pod")
-
-	nodeLabelUpdateTimeout = 60 * time.Second
 )
+
+// transientError marks an error as eligible for rate-limited retry through the workqueue.
+type transientError struct{ err error }
+
+func (t *transientError) Error() string { return t.err.Error() }
+func (t *transientError) Unwrap() error { return t.err }
+
+func transient(err error) error { return &transientError{err: err} }
+
+func isTransient(err error) bool {
+	var te *transientError
+	return errors.As(err, &te)
+}
 
 // do processes items from the work queue in a loop until the context is canceled.
 func do(
@@ -33,6 +45,7 @@ func do(
 	cfg *rest.Config,
 	indexer cache.Indexer,
 	q workqueue.TypedRateLimitingInterface[string],
+	labeler node.Updater,
 	cmd *Command,
 ) {
 
@@ -40,27 +53,21 @@ func do(
 	defer log.Debug("worker stopped")
 
 	for {
-		// Get next item from queue with proper shutdown handling
 		item, shutdown := q.Get()
 		if shutdown {
 			log.Debug("work queue shut down, stopping worker")
 			return
 		}
 
-		// Process the item in a closure to ensure proper cleanup
 		func(key string) {
-			// Mark the item as done when we finish processing
 			defer q.Done(key)
 
-			// Parse namespace and name from the cache key
-			_, _, err := cache.SplitMetaNamespaceKey(key)
-			if err != nil {
+			if _, _, err := cache.SplitMetaNamespaceKey(key); err != nil {
 				log.Warn("invalid cache key format", "key", key, "err", err)
 				q.Forget(key)
 				return
 			}
 
-			// Retrieve the pod object from the cache
 			o, exists, err := indexer.GetByKey(key)
 			if err != nil {
 				log.Warn("failed to get pod from cache", "key", key, "err", err)
@@ -69,13 +76,12 @@ func do(
 			}
 
 			if !exists {
-				// Pod was deleted; this is normal during pod lifecycle
+				// Pod deleted; normal lifecycle.
 				log.Debug("pod no longer exists in cache", "key", key)
 				q.Forget(key)
 				return
 			}
 
-			// Type assert to Pod object
 			pod, ok := o.(*corev1.Pod)
 			if !ok {
 				log.Warn("cache object is not a Pod", "key", key, "type", fmt.Sprintf("%T", o))
@@ -83,25 +89,26 @@ func do(
 				return
 			}
 
-			// Process the pod
-			if err := processPod(ctx, log, cs, cfg, pod, cmd); err != nil {
+			if err := processPod(ctx, log, cs, cfg, labeler, pod, cmd); err != nil {
 				log.Warn("failed to process pod", "pod", pod.Name, "err", err)
+				if isTransient(err) {
+					q.AddRateLimited(key)
+					return
+				}
 			}
 
-			// Always forget the item to prevent infinite retries
 			q.Forget(key)
 		}(item)
 	}
 }
 
 // processPod handles the execution of a command in a single pod.
-// This function encapsulates all the logic for command execution, including
-// readiness checks, deduplication, and cleanup operations.
 func processPod(
 	ctx context.Context,
 	log *slog.Logger,
 	cs *kubernetes.Clientset,
 	cfg *rest.Config,
+	labeler node.Updater,
 	pod *corev1.Pod,
 	cmd *Command,
 ) error {
@@ -111,26 +118,23 @@ func processPod(
 		return nil
 	}
 
-	// Ensure we only process each pod UID once to prevent duplicate exports
+	// Ensure we only process each pod UID once to prevent duplicate exports.
 	if processed.Has(string(pod.UID)) {
 		log.Debug("pod already processed", "pod", pod.Name, "uid", pod.UID)
 		return nil
 	}
 
-	// Add jitter to prevent thundering herd problems when many pods become ready simultaneously
-	jitterMs := rand.Intn(200) //nolint:gosec // G404: Non-crypto use case for jitter timing
+	// Add jitter to prevent thundering herd when many pods become ready simultaneously.
+	jitter := time.Duration(rand.IntN(200)) * time.Millisecond //nolint:gosec // G404: non-crypto jitter
 	select {
-	case <-time.After(time.Duration(jitterMs) * time.Millisecond):
+	case <-time.After(jitter):
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 
-	// Create per-pod timeout context to prevent hanging executions
+	// Per-pod timeout context bounds the whole pod processing budget.
 	pctx, cancel := context.WithTimeout(ctx, cmd.Timeout)
 	defer cancel()
-
-	// Mark this pod as processed regardless of success/failure to prevent endless retries
-	processed.Add(string(pod.UID))
 
 	log.Debug("processing pod",
 		"pod", pod.Name,
@@ -138,7 +142,6 @@ func processPod(
 		"node", pod.Spec.NodeName,
 	)
 
-	// Get GPU serial numbers from the pod
 	serials, err := gpu.GetSerialNumbers(pctx, log, cs, cfg, pod, cmd.Container)
 	if err != nil {
 		counterErr.Increment(pod.Spec.NodeName, pod.Name)
@@ -148,20 +151,18 @@ func processPod(
 			"node", pod.Spec.NodeName,
 			"err", err,
 		)
-		return fmt.Errorf("error obtaining GPU serial numbers: %w", err)
+		// Pod-exec failures are commonly transient (network, pod restart).
+		return transient(fmt.Errorf("error obtaining GPU serial numbers: %w", err))
 	}
 
-	// Skip pods without serial numbers
 	if len(serials) == 0 {
 		log.Debug("no GPU serial numbers found, skipping export", "pod", pod.Name, "uid", pod.UID, "node", pod.Spec.NodeName)
+		// Cache this UID so we don't keep retrying pods that report no GPUs.
+		processed.Add(string(pod.UID))
 		return nil
 	}
 
-	// Update gpu and chassis labels on the pod underlining node
-	labeler := node.NewLabelUpdater(cs)
-	labelCtx, labelCancel := context.WithTimeout(ctx, nodeLabelUpdateTimeout)
-	defer labelCancel()
-	if err = node.EnsureLabels(labelCtx, log, labeler, pod.Spec.NodeName, serials); err != nil {
+	if err = node.EnsureLabels(pctx, log, labeler, pod.Spec.NodeName, serials); err != nil {
 		counterErr.Increment(pod.Spec.NodeName, pod.Name)
 		log.Error("failed to ensure node labels",
 			"pod", pod.Name,
@@ -169,10 +170,9 @@ func processPod(
 			"node", pod.Spec.NodeName,
 			"err", err,
 		)
-		return fmt.Errorf("failed to ensure node labels: %w", err)
+		return transient(fmt.Errorf("failed to ensure node labels: %w", err))
 	}
 
-	// Retrieve node provider ID for export metadata
 	nodeInfo, err := node.GetNodeProviderID(pctx, log, cs, pod.Spec.NodeName)
 	if err != nil {
 		counterErr.Increment(pod.Spec.NodeName, pod.Name)
@@ -182,7 +182,7 @@ func processPod(
 			"node", pod.Spec.NodeName,
 			"err", err,
 		)
-		return fmt.Errorf("failed to get node provider ID: %w", err)
+		return transient(fmt.Errorf("failed to get node provider ID: %w", err))
 	}
 
 	if nodeInfo.Identifier == "" {
@@ -195,7 +195,6 @@ func processPod(
 		)
 	}
 
-	// Export the serial numbers using the specified exporter
 	if err := cmd.exporter.Export(pctx, log, cmd.Cluster, pod, nodeInfo.Identifier, serials); err != nil {
 		counterErr.Increment(pod.Spec.NodeName, pod.Name)
 		log.Error("failed to export GPU serial numbers",
@@ -206,13 +205,12 @@ func processPod(
 			"provider", nodeInfo.Raw,
 			"err", err,
 		)
-		return fmt.Errorf("failed to export GPU serial numbers: %w", err)
+		return transient(fmt.Errorf("failed to export GPU serial numbers: %w", err))
 	}
 
-	// Increment success metric
 	counterSuccess.Increment(pod.Spec.NodeName, pod.Name)
+	processed.Add(string(pod.UID))
 
-	// Success case
 	log.Debug("pod processed successfully",
 		"exporter", cmd.ExporterType,
 		"pod", pod.Name,
@@ -226,19 +224,15 @@ func processPod(
 // podReady checks if a pod is ready to execute commands.
 // A pod is considered ready when it's in Running phase and all containers are ready.
 func podReady(p *corev1.Pod) bool {
-	// Pod must be in Running phase
 	if p.Status.Phase != corev1.PodRunning {
 		return false
 	}
 
-	// Ensure all declared containers are present in status
-	// This prevents racing with container creation
+	// Ensure all declared containers are present in status to prevent racing with container creation.
 	if len(p.Status.ContainerStatuses) < len(p.Spec.Containers) {
 		return false
 	}
 
-	// All containers must be ready
-	// This ensures we don't execute commands before containers finish starting
 	for _, status := range p.Status.ContainerStatuses {
 		if !status.Ready {
 			return false

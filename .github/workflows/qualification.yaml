@@ -1,0 +1,89 @@
+---
+name: qualification
+
+# Reusable qualification pipeline: test + lint + vulnerability scan.
+# Invoked by main.yaml on every push/PR; can also be invoked by release.yaml
+# to gate tag builds. All version pins are loaded from .settings.yaml /
+# .go-version via the load-versions composite action so tool drift between
+# Makefile and CI is impossible.
+
+on:
+  workflow_call:
+    inputs:
+      coverage_report:
+        description: 'Upload coverage report to codecov'
+        type: boolean
+        required: false
+        default: false
+      enforce_coverage:
+        description: 'Enforce coverage_threshold from .settings.yaml (fails CI on shortfall)'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Load versions
+        id: versions
+        uses: ./.github/actions/load-versions
+
+      - name: Run Go tests
+        uses: ./.github/actions/go-test
+        with:
+          go_version: ${{ steps.versions.outputs.go }}
+          coverage_report: ${{ inputs.coverage_report }}
+          coverage_threshold: ${{ inputs.enforce_coverage && steps.versions.outputs.coverage_threshold || '' }}
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Load versions
+        id: versions
+        uses: ./.github/actions/load-versions
+
+      - name: Run Go + YAML linters
+        uses: ./.github/actions/go-lint
+        with:
+          go_version: ${{ steps.versions.outputs.go }}
+          golangci_lint_version: ${{ steps.versions.outputs.golangci_lint }}
+          lint_timeout: ${{ steps.versions.outputs.lint_timeout }}
+
+  scan:
+    name: Vulnerability Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Load versions
+        id: versions
+        uses: ./.github/actions/load-versions
+
+      - name: Run grype filesystem scan
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2  # v7.4.0
+        id: grype
+        with:
+          path: '.'
+          severity-cutoff: high
+          only-fixed: true
+          fail-build: true

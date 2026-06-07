@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -111,14 +112,15 @@ func (e *Exporter) Write(ctx context.Context, log *slog.Logger, records []*gpu.S
 		req.Header.Set("Authorization", "Bearer "+e.AuthToken)
 	}
 
-	// Send request
 	resp, err := e.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send HTTP request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body) // allow connection reuse
+		resp.Body.Close()
+	}()
 
-	// Check response status
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("HTTP request failed with status %d", resp.StatusCode)
 	}
@@ -157,7 +159,10 @@ func (e *Exporter) Health(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to send health check request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return fmt.Errorf("health check failed with status %d", resp.StatusCode)

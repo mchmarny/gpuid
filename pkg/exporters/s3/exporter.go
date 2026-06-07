@@ -167,7 +167,7 @@ func (e *Exporter) generateS3Key(timestamp time.Time) string {
 	pattern = strings.ReplaceAll(pattern, "%d", fmt.Sprintf("%02d", timestamp.Day()))
 	pattern = strings.ReplaceAll(pattern, "%H", fmt.Sprintf("%02d", timestamp.Hour()))
 
-	filename := fmt.Sprintf("%s.csv", timestamp.Format("20060102-150405-000"))
+	filename := fmt.Sprintf("%s.csv", timestamp.Format("20060102-150405.000"))
 
 	if e.Prefix != "" {
 		return fmt.Sprintf("%s/%s/%s", e.Prefix, pattern, filename)

@@ -2,9 +2,9 @@ package node
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
-	"maps"
 	"regexp"
 	"sort"
 	"strings"
@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/mchmarny/gpuid/pkg/gpu"
@@ -76,10 +77,11 @@ func sanitizeLabelValue(value string) string {
 	return strings.TrimSpace(sanitized)
 }
 
-// Updater interface for testability
+// Updater is the contract the labeler depends on. Reads the current node and applies
+// a label patch so multiple controllers writing different labels never conflict.
 type Updater interface {
 	GetNode(ctx context.Context, name string) (*corev1.Node, error)
-	UpdateNode(ctx context.Context, node *corev1.Node) (*corev1.Node, error)
+	PatchNodeLabels(ctx context.Context, name string, patch []byte) error
 }
 
 // Labeler implements Updater
@@ -96,8 +98,9 @@ func (l *Labeler) GetNode(ctx context.Context, name string) (*corev1.Node, error
 	return l.client.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
 }
 
-func (l *Labeler) UpdateNode(ctx context.Context, node *corev1.Node) (*corev1.Node, error) {
-	return l.client.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+func (l *Labeler) PatchNodeLabels(ctx context.Context, name string, patch []byte) error {
+	_, err := l.client.CoreV1().Nodes().Patch(ctx, name, types.StrategicMergePatchType, patch, metav1.PatchOptions{})
+	return err
 }
 
 // EnsureLabels is the testable version that accepts an interface
@@ -132,7 +135,9 @@ func EnsureLabels(ctx context.Context, log *slog.Logger, labeler Updater, nodeNa
 	})
 }
 
-// attemptLabelUpdate performs a single attempt to update node labels
+// attemptLabelUpdate performs a single attempt to update node labels via a
+// strategic merge patch. Patch is conflict-free with other label writers and
+// avoids the Get/mutate/Update race entirely.
 func attemptLabelUpdate(ctx context.Context, log *slog.Logger, labeler Updater, nodeName string, desiredLabels map[string]string) (bool, error) {
 	node, err := labeler.GetNode(ctx, nodeName)
 	if err != nil {
@@ -143,7 +148,6 @@ func attemptLabelUpdate(ctx context.Context, log *slog.Logger, labeler Updater, 
 		return false, fmt.Errorf("node %s is nil", nodeName)
 	}
 
-	// Check if labels need updating to avoid unnecessary API calls
 	currentLabels := node.GetLabels()
 	if currentLabels == nil {
 		currentLabels = make(map[string]string)
@@ -154,22 +158,36 @@ func attemptLabelUpdate(ctx context.Context, log *slog.Logger, labeler Updater, 
 		return true, nil
 	}
 
-	// Create a copy of labels to avoid mutating the original
-	updatedLabels := make(map[string]string, len(currentLabels))
-	maps.Copy(updatedLabels, currentLabels)
+	// Build patch: set every desired label, and explicitly null any stale
+	// gpuid-prefixed label that is no longer desired (strategic merge null = delete).
+	patchLabels := make(map[string]any, len(desiredLabels))
+	for k, v := range desiredLabels {
+		patchLabels[k] = v
+	}
+	for k := range currentLabels {
+		if !strings.HasPrefix(k, labelNS) {
+			continue
+		}
+		if _, keep := desiredLabels[k]; !keep {
+			patchLabels[k] = nil
+		}
+	}
 
-	// Clear existing GPU labels and apply new ones
-	clearLabels(updatedLabels)
-	applyLabels(updatedLabels, desiredLabels)
-
-	// Update the node
-	node.SetLabels(updatedLabels)
-	_, err = labeler.UpdateNode(ctx, node)
+	patch := map[string]any{
+		"metadata": map[string]any{
+			"labels": patchLabels,
+		},
+	}
+	patchBytes, err := json.Marshal(patch)
 	if err != nil {
+		return false, fmt.Errorf("failed to marshal label patch: %w", err)
+	}
+
+	if err := labeler.PatchNodeLabels(ctx, nodeName, patchBytes); err != nil {
 		return false, err
 	}
 
-	log.Info("successfully updated node labels", "node", nodeName, "gpu_labels", len(desiredLabels))
+	log.Info("successfully patched node labels", "node", nodeName, "gpu_labels", len(desiredLabels))
 	return true, nil
 }
 
@@ -256,9 +274,9 @@ func calculateGPULabels(log *slog.Logger, serials []*gpu.Serials) map[string]str
 	return labels
 }
 
-// needsLabelUpdate checks if the current labels differ from desired labels
+// needsLabelUpdate checks if the current labels differ from desired labels.
 func needsLabelUpdate(current, desired map[string]string) bool {
-	// Check if any GPU labels need to be removed
+	// Any gpuid label that is no longer desired must be removed.
 	for k := range current {
 		if strings.HasPrefix(k, labelNS) {
 			if _, exists := desired[k]; !exists {
@@ -267,7 +285,7 @@ func needsLabelUpdate(current, desired map[string]string) bool {
 		}
 	}
 
-	// Check if any desired labels are missing or different
+	// Any desired label that is missing or has a different value must be applied.
 	for k, v := range desired {
 		if current[k] != v {
 			return true
@@ -275,18 +293,4 @@ func needsLabelUpdate(current, desired map[string]string) bool {
 	}
 
 	return false
-}
-
-// clearGPULabels removes all existing GPU-related labels
-func clearLabels(labels map[string]string) {
-	for k := range labels {
-		if strings.HasPrefix(k, labelNS) {
-			delete(labels, k)
-		}
-	}
-}
-
-// applyLabels adds the desired GPU labels
-func applyLabels(labels, desiredLabels map[string]string) {
-	maps.Copy(labels, desiredLabels)
 }

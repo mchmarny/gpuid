@@ -86,6 +86,12 @@ linters:
     dupl:
       threshold: 200
 
+    goconst:
+      # Counted across module incl. test files. 4 catches duplication that
+      # actually pays for a constant; 3 noisily flags case literals like
+      # `"debug"` and string fixtures like `"N/A"`.
+      min-occurrences: 4
+
     depguard:
       rules:
         main:
@@ -106,6 +112,7 @@ linters:
           - dupl
           - errcheck
           - funlen
+          - goconst
           - gocognit
           - gocyclo
           - gosec
