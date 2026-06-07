@@ -36,6 +36,11 @@ runs:
 
     - name: Lint YAML
       if: hashFiles('.yamllint') != ''
-      uses: karancode/yamllint-github-action@4052d365f09b8d34eb552c363d1141fd60e2aeb2  # v3.0.0
-      with:
-        yamllint_config_filepath: .yamllint
+      shell: bash
+      run: |
+        # Use pip directly instead of karancode/yamllint-github-action: that
+        # action builds its own Dockerfile on every run and has been failing
+        # the base-image build on ubuntu-latest. yamllint is a pure-Python
+        # package and the version is pinned via .settings.yaml.
+        pip install --quiet --no-cache-dir 'yamllint==1.38.0'
+        make lint-yaml
