@@ -47,13 +47,26 @@ jobs:
       attestations: write
     steps:
 
-      # build the image (composite action handles checkout internally)
+      # mchmarny/common/go-build runs checkout internally, but we need the
+      # repo first to read .go-version. A lightweight checkout here is
+      # cheap and the composite action is idempotent on a pre-checked-out
+      # workspace.
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+
+      - name: Read Go version
+        id: go
+        shell: bash
+        run: echo "version=$(cat .go-version)" >> "$GITHUB_OUTPUT"
+
+      # build the image (passes the project's Go version so the toolchain
+      # in the action's runner matches what go.mod requires)
       - uses: mchmarny/common/go-build@994d32fc6dcff3e6006a59db9d20b9e201423cb4  # v0.2.6
         id: build
         with:
           main-path: cmd/gpuid/main.go
           image-uri: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
           release-version: ${{ github.ref_name }}
+          go-version: ${{ steps.go.outputs.version }}
           registry-username: ${{ github.actor }}
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
