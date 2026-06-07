@@ -58,9 +58,21 @@ IMAGE=$(kubectl get pods \
   -o jsonpath="{.items[0].status.containerStatuses[0].imageID}")
 msg "Using image: $IMAGE"
 
-# Count successful exports (length == number of nodes with GPUs)
+# Count successful exports across the deployment (length == number of GPU
+# nodes the leader reconciled). With leader election enabled, only one
+# replica reconciles, but `kubectl logs -l app=gpuid` merges stderr from
+# every pod and includes klog plain-text from k8s.io/client-go's
+# leaderelection package alongside the slog JSON we emit. Parse the
+# stream defensively: only consider lines that are valid JSON.
 SUCCESS_COUNT=$(kubectl -n gpuid logs -l app=gpuid --tail=-1 \
-  | jq -s '[.[] | select(.msg == "export completed")] | length')
+  | jq -Rrs '
+      [ split("\n")[]
+        | select(length > 0)
+        | . as $l
+        | try (fromjson) catch empty
+        | select(.msg == "export completed") ]
+      | length
+    ')
 if [[ "$SUCCESS_COUNT" -lt 2 ]]; then
   err "Expected at least 2 successful export, found $SUCCESS_COUNT"
 fi
