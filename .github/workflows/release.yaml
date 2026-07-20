@@ -82,7 +82,7 @@ jobs:
           echo "worker-count=$(yq -r '.testing.kind_worker_count' .settings.yaml)" >> "$GITHUB_OUTPUT"
 
       # run integration tests with kind
-      - uses: chainguard-dev/actions/setup-kind@05fbd381f7c158bd33c9bbf3a28f67852269fdf8  # v1.6.21
+      - uses: chainguard-dev/actions/setup-kind@fabe4ed3f66ceb5f8ec86ed7ae6d0c945ca362fb  # v1.6.28
         with:
           kind-version: ${{ steps.settings.outputs.kind-version }}
           k8s-version: ${{ steps.settings.outputs.k8s-version }}
